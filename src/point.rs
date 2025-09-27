@@ -5,13 +5,21 @@ use rug::{Complete, Integer};
 
 trait Point<'a, 'c>
 where
-    Self: ops::Mul<u64, Output = Self> + 'a,
-    &'a Self: ops::Mul<u64, Output = Self>,
+    Self: 'a
+        + Sized
+        + ops::Mul<u64>
+        + ops::MulAssign<u64>
+        + ops::Add
+        + ops::Add<&'a Self>
+        + ops::Sub
+        + ops::Sub<&'a Self>
+        + ops::AddAssign,
+    &'a Self: ops::Mul<u64> + ops::Add + ops::Add<&'a Self> + ops::Sub + ops::Sub<&'a Self>,
 {
-    fn add(&self, rhs: &Self) -> Self;
     fn double(&self) -> Self;
 }
 
+#[derive(Clone)]
 struct ProjPoint<'c> {
     x: Integer,
     y: Integer,
@@ -19,11 +27,38 @@ struct ProjPoint<'c> {
     curve: &'c WeierstrassCurve,
 }
 
+impl<'c> ProjPoint<'c> {
+    fn origin(curve: &'c WeierstrassCurve) -> ProjPoint<'c> {
+        ProjPoint {
+            x: Integer::from(0),
+            y: Integer::from(1),
+            z: Integer::from(0),
+            curve,
+        }
+    }
+}
+
 impl<'c> ops::Mul<u64> for &ProjPoint<'c> {
     type Output = ProjPoint<'c>;
 
-    fn mul(self, rhs: u64) -> Self::Output {
-        todo!()
+    fn mul(self, n: u64) -> Self::Output {
+        if n == 0 {
+            return ProjPoint::origin(self.curve);
+        }
+
+        let mut q = self.clone();
+        let mut m = 3 * n;
+        let b = 64 - m.leading_zeros();
+        for i in (1..=b - 2).rev() {
+            q = q.double();
+            let (m_i, n_i) = ((m >> i) & 1, (n >> i) & 1);
+            if (m_i, n_i) == (1, 0) {
+                q += self;
+            } else if (m_i, n_i) == (0, 1) {
+                q -= self;
+            }
+        }
+        q
     }
 }
 
@@ -35,11 +70,10 @@ impl<'c> ops::Mul<u64> for ProjPoint<'c> {
     }
 }
 
-impl<'a, 'c> Point<'a, 'c> for ProjPoint<'c>
-where
-    Self: 'a,
-{
-    fn add(&self, rhs: &ProjPoint<'c>) -> Self {
+impl<'a, 'c> ops::Add<&'a ProjPoint<'c>> for &ProjPoint<'c> {
+    type Output = ProjPoint<'c>;
+
+    fn add(self, rhs: &ProjPoint<'c>) -> Self::Output {
         let n = &self.curve.n;
 
         let x2z1 = (&rhs.x * &self.z).complete();
@@ -75,10 +109,6 @@ where
             z,
             curve: self.curve,
         }
-    }
-
-    fn double(&self) -> Self {
-        todo!()
     }
 }
 
