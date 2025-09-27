@@ -1,11 +1,15 @@
 use crate::curve::WeierstrassCurve;
-use std::ops;
+use std::{ops, process::Output};
 
 use rug::{Complete, Integer};
 
-trait Point<'c>: ops::Mul<u64, Output = Self> {
-    fn add(rhs: Self) -> Self;
-    fn double() -> Self;
+trait Point<'a, 'c>
+where
+    Self: ops::Mul<u64, Output = Self> + 'a,
+    &'a Self: ops::Mul<u64, Output = Self>,
+{
+    fn add(&self, rhs: &Self) -> Self;
+    fn double(&self) -> Self;
 }
 
 struct ProjPoint<'c> {
@@ -15,13 +19,26 @@ struct ProjPoint<'c> {
     curve: &'c WeierstrassCurve,
 }
 
-// impl ops::Mul<u64> for Point {
-//     type Output = ProjPoint;
-//
-//     fn mul(self, rhs: u64) -> Self::Output {}
-// }
+impl<'c> ops::Mul<u64> for &ProjPoint<'c> {
+    type Output = ProjPoint<'c>;
 
-impl<'c> Point<'c> for ProjPoint<'c> {
+    fn mul(self, rhs: u64) -> Self::Output {
+        todo!()
+    }
+}
+
+impl<'c> ops::Mul<u64> for ProjPoint<'c> {
+    type Output = ProjPoint<'c>;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        (&self) * rhs
+    }
+}
+
+impl<'a, 'c> Point<'a, 'c> for ProjPoint<'c>
+where
+    Self: 'a,
+{
     fn add(&self, rhs: &ProjPoint<'c>) -> Self {
         let n = &self.curve.n;
 
@@ -60,7 +77,7 @@ impl<'c> Point<'c> for ProjPoint<'c> {
         }
     }
 
-    fn double() -> Self {
+    fn double(&self) -> Self {
         todo!()
     }
 }
