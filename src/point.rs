@@ -36,6 +36,30 @@ impl<'c> Mul<u64> for &ProjPoint<'c> {
         if n == 0 {
             return ProjPoint::origin(self.curve);
         } else if n == 2 {
+            let n = &self.curve.n;
+
+            let lambda: Integer = ((&self.x * &self.y).complete() << 1) % n;
+            let nu: Integer = ((&self.y * &self.z).complete() << 1) % n;
+            let mu: Integer =
+                (3 * self.x.clone().square() + &self.curve.a * self.z.clone().square()) % n;
+
+            let mu_sq = mu.clone().square();
+            let nu_sq = nu.clone().square() % n;
+            let lambda_nu: Integer = lambda * &nu;
+            let two_lambda_nu: Integer = Complete::complete(&lambda_nu << 1);
+
+            let y_lhs = mu * ((&two_lambda_nu + lambda_nu - &mu_sq) % n);
+            let x: Integer = (&nu * (&mu_sq - two_lambda_nu)) % n;
+            let z = &nu_sq * nu;
+            let y_rhs = (nu_sq * &self.y) % n;
+            let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
+
+            return ProjPoint {
+                x,
+                y,
+                z,
+                curve: self.curve,
+            };
         }
 
         let mut q = self.clone();
@@ -51,14 +75,6 @@ impl<'c> Mul<u64> for &ProjPoint<'c> {
             }
         }
         q
-    }
-}
-
-impl<'c> Mul<u64> for ProjPoint<'c> {
-    type Output = ProjPoint<'c>;
-
-    fn mul(self, rhs: u64) -> Self::Output {
-        (&self) * rhs
     }
 }
 
@@ -123,23 +139,36 @@ fn halve_mod(x: Integer, n: &Integer) -> Integer {
     if x.is_even() { x >> 1 } else { (x + n) >> 1 }
 }
 
-macro_rules! forward_ref_binop {
+macro_rules! forward_lhs_ref_binop {
     (impl $imp:ident, $method:ident for $t:ty, $u:ty) => {
-        impl<'a, 'c> $imp<$u> for &'a $t {
-            type Output = <$t as $imp<$u>>::Output;
+        impl<'c> $imp<$u> for $t {
+            type Output = $t;
 
             #[inline]
             fn $method(self, rhs: $u) -> <$t as $imp<$u>>::Output {
-                $imp::$method(self, &rhs)
+                $imp::$method(&self, rhs)
             }
         }
+    };
+}
 
+macro_rules! forward_ref_binop {
+    (impl $imp:ident, $method:ident for $t:ty, $u:ty) => {
         impl<'a, 'c> $imp<&'a $u> for $t {
             type Output = <$t as $imp<$u>>::Output;
 
             #[inline]
             fn $method(self, rhs: &'a $u) -> <$t as $imp<$u>>::Output {
                 $imp::$method(&self, rhs)
+            }
+        }
+
+        impl<'a, 'c> $imp<$u> for &'a $t {
+            type Output = <$t as $imp<$u>>::Output;
+
+            #[inline]
+            fn $method(self, rhs: $u) -> <$t as $imp<$u>>::Output {
+                $imp::$method(self, &rhs)
             }
         }
 
@@ -154,7 +183,7 @@ macro_rules! forward_ref_binop {
     };
 }
 
-macro_rules! sub_from_add_neg {
+macro_rules! gen_sub_from_add_neg {
     ($t:ty) => {
         impl<'a, 'c> Sub<&'a $t> for &$t {
             type Output = $t;
@@ -167,6 +196,7 @@ macro_rules! sub_from_add_neg {
     };
 }
 
+forward_lhs_ref_binop! {impl Mul, mul for ProjPoint<'c>, u64}
 forward_ref_binop! {impl Add, add for ProjPoint<'c>, ProjPoint<'c> }
-sub_from_add_neg! {ProjPoint<'c>}
+gen_sub_from_add_neg! {ProjPoint<'c>}
 forward_ref_binop! {impl Sub, sub for ProjPoint<'c>, ProjPoint<'c> }
