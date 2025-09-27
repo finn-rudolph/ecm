@@ -3,7 +3,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use rug::{Complete, Integer};
 
-trait Point<'a, 'c>
+pub trait Point<'a, 'c>
 where
     Self: 'a + Sized + Mul<u64> + Add + Add<&'a Self> + Sub + Sub<&'a Self> + Neg,
     &'a Self: Mul<u64> + Add + Add<&'a Self> + Sub + Sub<&'a Self> + Neg,
@@ -11,11 +11,11 @@ where
 }
 
 #[derive(Clone)]
-struct ProjPoint<'c> {
-    x: Integer,
-    y: Integer,
-    z: Integer,
-    curve: &'c WeierstrassCurve,
+pub struct ProjPoint<'c> {
+    pub x: Integer,
+    pub y: Integer,
+    pub z: Integer,
+    pub curve: &'c WeierstrassCurve,
 }
 
 impl<'c> ProjPoint<'c> {
