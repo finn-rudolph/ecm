@@ -3,13 +3,16 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use rug::{Complete, Integer};
 
-pub trait Point<'a, 'c>
-where
-    for<'b> Self: 'a + Sized + Mul<u64> + Add + Add<&'b Self> + Sub + Sub<&'b Self> + Neg,
-    for<'b> &'a Self:
-        Mul<u64> + Add<&'b Self> + Add<&'b Self> + Sub<&'b Self> + Sub<&'b Self> + Neg,
-{
+pub trait Point<'c> {
     type CurveType: Curve;
+
+    fn add(&self, rhs: &Self) -> Self;
+
+    fn sub(&self, rhs: &Self) -> Self;
+
+    fn neg(&self) -> Self;
+
+    fn mul(&self, n: u64) -> Self;
 
     fn curve(&self) -> &'c Self::CurveType;
 }
@@ -19,7 +22,7 @@ pub struct ProjPoint<'c> {
     pub x: Integer,
     pub y: Integer,
     pub z: Integer,
-    curve: &'c WeierstrassCurve,
+    pub curve: &'c WeierstrassCurve,
 }
 
 impl<'c> ProjPoint<'c> {
@@ -33,70 +36,10 @@ impl<'c> ProjPoint<'c> {
     }
 }
 
-impl<'a, 'c> Point<'a, 'c> for ProjPoint<'c>
-where
-    Self: 'a,
-{
+impl<'c> Point<'c> for ProjPoint<'c> {
     type CurveType = WeierstrassCurve;
 
-    fn curve(&self) -> &'c WeierstrassCurve {
-        self.curve
-    }
-}
-
-impl<'c> Mul<u64> for &ProjPoint<'c> {
-    type Output = ProjPoint<'c>;
-
-    fn mul(self, n: u64) -> Self::Output {
-        if n == 0 {
-            return ProjPoint::origin(self.curve);
-        } else if n == 2 {
-            let n = &self.curve.n;
-
-            let lambda: Integer = ((&self.x * &self.y).complete() << 1) % n;
-            let nu: Integer = ((&self.y * &self.z).complete() << 1) % n;
-            let mu: Integer =
-                (3 * self.x.clone().square() + &self.curve.a * self.z.clone().square()) % n;
-
-            let mu_sq = mu.clone().square();
-            let nu_sq = nu.clone().square() % n;
-            let lambda_nu: Integer = lambda * &nu;
-            let two_lambda_nu: Integer = Complete::complete(&lambda_nu << 1);
-
-            let y_lhs = mu * ((&two_lambda_nu + lambda_nu - &mu_sq) % n);
-            let x: Integer = (&nu * (&mu_sq - two_lambda_nu)) % n;
-            let z = &nu_sq * nu;
-            let y_rhs = (nu_sq * &self.y) % n;
-            let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
-
-            return ProjPoint {
-                x,
-                y,
-                z,
-                curve: self.curve,
-            };
-        }
-
-        let mut q = self.clone();
-        let m = 3 * n;
-        let b = 64 - m.leading_zeros();
-        for i in (1..=b - 2).rev() {
-            q = q * 2;
-            let (m_i, n_i) = ((m >> i) & 1, (n >> i) & 1);
-            if (m_i, n_i) == (1, 0) {
-                q = q + self;
-            } else if (m_i, n_i) == (0, 1) {
-                q = q - self;
-            }
-        }
-        q
-    }
-}
-
-impl<'c> Add<&ProjPoint<'c>> for &ProjPoint<'c> {
-    type Output = ProjPoint<'c>;
-
-    fn add(self, rhs: &ProjPoint<'c>) -> Self::Output {
+    fn add(&self, rhs: &Self) -> Self {
         let n = &self.curve.n;
 
         let x2z1 = (&rhs.x * &self.z).complete();
@@ -133,18 +76,67 @@ impl<'c> Add<&ProjPoint<'c>> for &ProjPoint<'c> {
             curve: self.curve,
         }
     }
-}
 
-impl<'c> Neg for &ProjPoint<'c> {
-    type Output = ProjPoint<'c>;
+    fn mul(&self, n: u64) -> Self {
+        if n == 0 {
+            return ProjPoint::origin(self.curve);
+        } else if n == 2 {
+            let n = &self.curve.n;
 
-    fn neg(self) -> Self::Output {
+            let lambda: Integer = ((&self.x * &self.y).complete() << 1) % n;
+            let nu: Integer = ((&self.y * &self.z).complete() << 1) % n;
+            let mu: Integer =
+                (3 * self.x.clone().square() + &self.curve.a * self.z.clone().square()) % n;
+
+            let mu_sq = mu.clone().square();
+            let nu_sq = nu.clone().square() % n;
+            let lambda_nu: Integer = lambda * &nu;
+            let two_lambda_nu: Integer = Complete::complete(&lambda_nu << 1);
+
+            let y_lhs = mu * ((&two_lambda_nu + lambda_nu - &mu_sq) % n);
+            let x: Integer = (&nu * (&mu_sq - two_lambda_nu)) % n;
+            let z = &nu_sq * nu;
+            let y_rhs = (nu_sq * &self.y) % n;
+            let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
+
+            return ProjPoint {
+                x,
+                y,
+                z,
+                curve: self.curve,
+            };
+        }
+
+        let mut q = self.clone();
+        let m = 3 * n;
+        let b = 64 - m.leading_zeros();
+        for i in (1..=b - 2).rev() {
+            q = q.mul(2);
+            let (m_i, n_i) = ((m >> i) & 1, (n >> i) & 1);
+            if (m_i, n_i) == (1, 0) {
+                q = q.add(self);
+            } else if (m_i, n_i) == (0, 1) {
+                q = q.sub(self);
+            }
+        }
+        q
+    }
+
+    fn neg(&self) -> Self {
         ProjPoint {
             x: self.x.clone(),
             y: (&self.y).neg().complete(),
             z: self.z.clone(),
             curve: self.curve,
         }
+    }
+
+    fn sub(&self, rhs: &Self) -> Self {
+        self.add(&rhs.neg())
+    }
+
+    fn curve(&self) -> &'c WeierstrassCurve {
+        self.curve
     }
 }
 
@@ -153,79 +145,3 @@ fn halve_mod(x: Integer, n: &Integer) -> Integer {
 
     if x.is_even() { x >> 1 } else { (x + n) >> 1 }
 }
-
-macro_rules! forward_lhs_ref_binop {
-    (impl $imp:ident, $method:ident for $t:ty, $u:ty) => {
-        impl<'c> $imp<$u> for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $method(self, rhs: $u) -> <$t as $imp<$u>>::Output {
-                $imp::$method(&self, rhs)
-            }
-        }
-    };
-}
-
-macro_rules! forward_ref_binop {
-    (impl $imp:ident, $method:ident for $t:ty, $u:ty) => {
-        impl<'a, 'c> $imp<&'a $u> for $t {
-            type Output = <$t as $imp<$u>>::Output;
-
-            #[inline]
-            fn $method(self, rhs: &'a $u) -> <$t as $imp<$u>>::Output {
-                $imp::$method(&self, rhs)
-            }
-        }
-
-        impl<'a, 'c> $imp<$u> for &'a $t {
-            type Output = <$t as $imp<$u>>::Output;
-
-            #[inline]
-            fn $method(self, rhs: $u) -> <$t as $imp<$u>>::Output {
-                $imp::$method(self, &rhs)
-            }
-        }
-
-        impl<'c> $imp<$u> for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $method(self, rhs: $u) -> <$t as $imp<$u>>::Output {
-                $imp::$method(&self, &rhs)
-            }
-        }
-    };
-}
-
-macro_rules! forward_ref_unop {
-    (impl $imp: ident, $method:ident for $t:ty) => {
-        impl<'c> $imp for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $method(self) -> Self::Output {
-                $imp::$method(&self)
-            }
-        }
-    };
-}
-
-macro_rules! gen_sub_from_add_neg {
-    ($t:ty) => {
-        impl<'a, 'c> Sub<&'a $t> for &$t {
-            type Output = $t;
-
-            #[inline]
-            fn sub(self, rhs: &'a $t) -> Self::Output {
-                self + (-rhs)
-            }
-        }
-    };
-}
-
-forward_lhs_ref_binop! {impl Mul, mul for ProjPoint<'c>, u64}
-forward_ref_binop! {impl Add, add for ProjPoint<'c>, ProjPoint<'c> }
-gen_sub_from_add_neg! {ProjPoint<'c>}
-forward_ref_binop! {impl Sub, sub for ProjPoint<'c>, ProjPoint<'c> }
-forward_ref_unop! {impl Neg, neg for ProjPoint<'c>}

@@ -1,7 +1,8 @@
-use rug::{Complete, Integer, rand::RandState};
+use rug::{Integer, rand::RandState};
 
 pub trait Curve {}
 
+#[derive(Default, Clone)]
 pub struct WeierstrassCurve {
     pub n: Integer,
     pub a: Integer,
