@@ -1,13 +1,17 @@
-use crate::curve::WeierstrassCurve;
+use crate::curve::{Curve, WeierstrassCurve};
 use std::ops::{Add, Mul, Neg, Sub};
 
 use rug::{Complete, Integer};
 
 pub trait Point<'a, 'c>
 where
-    Self: 'a + Sized + Mul<u64> + Add + Add<&'a Self> + Sub + Sub<&'a Self> + Neg,
-    &'a Self: Mul<u64> + Add + Add<&'a Self> + Sub + Sub<&'a Self> + Neg,
+    for<'b> Self: 'a + Sized + Mul<u64> + Add + Add<&'b Self> + Sub + Sub<&'b Self> + Neg,
+    for<'b> &'a Self:
+        Mul<u64> + Add<&'b Self> + Add<&'b Self> + Sub<&'b Self> + Sub<&'b Self> + Neg,
 {
+    type CurveType: Curve;
+
+    fn curve(&self) -> &'c Self::CurveType;
 }
 
 #[derive(Clone)]
@@ -15,7 +19,7 @@ pub struct ProjPoint<'c> {
     pub x: Integer,
     pub y: Integer,
     pub z: Integer,
-    pub curve: &'c WeierstrassCurve,
+    curve: &'c WeierstrassCurve,
 }
 
 impl<'c> ProjPoint<'c> {
@@ -26,6 +30,17 @@ impl<'c> ProjPoint<'c> {
             z: Integer::from(0),
             curve,
         }
+    }
+}
+
+impl<'a, 'c> Point<'a, 'c> for ProjPoint<'c>
+where
+    Self: 'a,
+{
+    type CurveType = WeierstrassCurve;
+
+    fn curve(&self) -> &'c WeierstrassCurve {
+        self.curve
     }
 }
 
@@ -183,6 +198,19 @@ macro_rules! forward_ref_binop {
     };
 }
 
+macro_rules! forward_ref_unop {
+    (impl $imp: ident, $method:ident for $t:ty) => {
+        impl<'c> $imp for $t {
+            type Output = $t;
+
+            #[inline]
+            fn $method(self) -> Self::Output {
+                $imp::$method(&self)
+            }
+        }
+    };
+}
+
 macro_rules! gen_sub_from_add_neg {
     ($t:ty) => {
         impl<'a, 'c> Sub<&'a $t> for &$t {
@@ -200,3 +228,4 @@ forward_lhs_ref_binop! {impl Mul, mul for ProjPoint<'c>, u64}
 forward_ref_binop! {impl Add, add for ProjPoint<'c>, ProjPoint<'c> }
 gen_sub_from_add_neg! {ProjPoint<'c>}
 forward_ref_binop! {impl Sub, sub for ProjPoint<'c>, ProjPoint<'c> }
+forward_ref_unop! {impl Neg, neg for ProjPoint<'c>}
