@@ -1,23 +1,16 @@
+mod montgomery;
 mod projective;
 
 use std::fmt::Display;
 
 use rug::{Integer, rand::RandState};
 
-pub use projective::ProjectivePt;
-
 pub trait Curve: Display {}
 
-pub trait Point: Display {
+pub trait Point: Display + Clone {
     type CurveType: Curve;
 
     fn new_curve(n: &Integer, rng: &mut RandState) -> Self;
-
-    fn add(&self, rhs: &Self) -> Self;
-
-    fn sub(&self, rhs: &Self) -> Self;
-
-    fn neg(&self) -> Self;
 
     fn mul(&self, n: u64) -> Self;
 
@@ -27,3 +20,5 @@ pub trait Point: Display {
 
     fn z(&self) -> &Integer;
 }
+
+pub use projective::ProjectivePoint;

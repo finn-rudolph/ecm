@@ -1,4 +1,4 @@
-use crate::coords::{Point, ProjectivePt};
+use crate::coords::{Point, ProjectivePoint};
 use crate::sieve;
 
 use rug::Complete;
@@ -7,7 +7,7 @@ use rug::{Integer, rand::RandState};
 pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Integer> {
     assert!(b1 < b2, "stage 1 bound must be smaller than stage 2 bound");
 
-    let mut point = ProjectivePt::new_curve(n, rng);
+    let mut point = ProjectivePoint::new_curve(n, rng);
     println!("point {}", &point);
     println!("{}", point.curve());
 

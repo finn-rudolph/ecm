@@ -16,58 +16,27 @@ impl Display for WeierstrassCurve {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "curve y^2 = x^3 + {} * x + {} mod {} (Weierstrass form)",
-            &self.a, &self.b, &self.n
+            "y^2 = x^3 + {}x + {} (Weierstrass form)",
+            &self.a, &self.b
         )
     }
 }
 
 #[derive(Clone)]
-pub struct ProjectivePt {
+pub struct ProjectivePoint {
     x: Integer,
     y: Integer,
     z: Integer,
     curve: Rc<WeierstrassCurve>,
 }
 
-impl ProjectivePt {
-    fn origin(curve: Rc<WeierstrassCurve>) -> ProjectivePt {
-        ProjectivePt {
+impl ProjectivePoint {
+    fn origin(curve: Rc<WeierstrassCurve>) -> ProjectivePoint {
+        ProjectivePoint {
             x: Integer::from(0),
             y: Integer::from(1),
             z: Integer::from(0),
             curve,
-        }
-    }
-}
-
-impl Display for ProjectivePt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{} : {} : {}]", &self.x, &self.y, &self.z)
-    }
-}
-
-impl Point for ProjectivePt {
-    type CurveType = WeierstrassCurve;
-
-    fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
-        loop {
-            let x = Integer::random_below_ref(n, rng).complete();
-            let y = Integer::random_below_ref(n, rng).complete();
-            let a = Integer::random_below_ref(n, rng).complete();
-            let b = (y.clone().square() - &x * (x.clone().square() + &a)) % n;
-
-            let discriminant: Integer = ((a.clone().square() * &a) << 2) + 27 * b.clone().square();
-
-            if discriminant.gcd(n) == 1 {
-                let curve = Rc::new(WeierstrassCurve { n: n.clone(), a, b });
-                return ProjectivePt {
-                    x,
-                    y,
-                    z: Integer::from(1),
-                    curve,
-                };
-            }
         }
     }
 
@@ -101,7 +70,7 @@ impl Point for ProjectivePt {
             n,
         );
 
-        ProjectivePt {
+        ProjectivePoint {
             x,
             y,
             z,
@@ -109,9 +78,53 @@ impl Point for ProjectivePt {
         }
     }
 
+    fn neg(&self) -> Self {
+        ProjectivePoint {
+            x: self.x.clone(),
+            y: (&self.y).neg().complete(),
+            z: self.z.clone(),
+            curve: self.curve.clone(),
+        }
+    }
+
+    fn sub(&self, rhs: &Self) -> Self {
+        self.add(&rhs.neg())
+    }
+}
+
+impl Display for ProjectivePoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{} : {} : {}]", &self.x, &self.y, &self.z)
+    }
+}
+
+impl Point for ProjectivePoint {
+    type CurveType = WeierstrassCurve;
+
+    fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+        loop {
+            let x = Integer::random_below_ref(n, rng).complete();
+            let y = Integer::random_below_ref(n, rng).complete();
+            let a = Integer::random_below_ref(n, rng).complete();
+            let b = (y.clone().square() - &x * (x.clone().square() + &a)) % n;
+
+            let discriminant: Integer = ((a.clone().square() * &a) << 2) + 27 * b.clone().square();
+
+            if discriminant.gcd(n) == 1 {
+                let curve = Rc::new(WeierstrassCurve { n: n.clone(), a, b });
+                return ProjectivePoint {
+                    x,
+                    y,
+                    z: Integer::from(1),
+                    curve,
+                };
+            }
+        }
+    }
+
     fn mul(&self, n: u64) -> Self {
         if n == 0 {
-            return ProjectivePt::origin(self.curve.clone());
+            return ProjectivePoint::origin(self.curve.clone());
         } else if n == 2 {
             let n = &self.curve.n;
 
@@ -131,7 +144,7 @@ impl Point for ProjectivePt {
             let y_rhs = (nu_sq * &self.y) % n;
             let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
 
-            return ProjectivePt {
+            return ProjectivePoint {
                 x,
                 y,
                 z,
@@ -152,19 +165,6 @@ impl Point for ProjectivePt {
             }
         }
         q
-    }
-
-    fn neg(&self) -> Self {
-        ProjectivePt {
-            x: self.x.clone(),
-            y: (&self.y).neg().complete(),
-            z: self.z.clone(),
-            curve: self.curve.clone(),
-        }
-    }
-
-    fn sub(&self, rhs: &Self) -> Self {
-        self.add(&rhs.neg())
     }
 
     fn x(&self) -> &Integer {
