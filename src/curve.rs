@@ -1,4 +1,4 @@
-use rug::{Integer, rand::RandState};
+use rug::Integer;
 
 pub trait Curve {}
 

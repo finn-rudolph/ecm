@@ -1,5 +1,5 @@
 use crate::curve::{Curve, WeierstrassCurve};
-use std::ops::{Add, Mul, Neg, Sub};
+use std::ops::Neg;
 
 use rug::{Complete, Integer};
 

@@ -5,9 +5,13 @@ use crate::{curve::WeierstrassCurve, curve_selection};
 use rug::Complete;
 use rug::{Integer, rand::RandState};
 
-fn ecm(n: &Integer, b1: usize, rng: &mut RandState) -> Option<Integer> {
+pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Integer> {
+    assert!(b1 < b2, "stage 1 bound must be smaller than stage 2 bound");
+
     let mut curve = WeierstrassCurve::default();
     let mut point = curve_selection::weierstrass(n, rng, &mut curve);
+
+    // stage 1
 
     for u in sieve::primes(b1) {
         let mut v = u;
