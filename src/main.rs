@@ -1,7 +1,5 @@
-mod curve;
-mod curve_selection;
+mod coords;
 mod ecm;
-mod point;
 mod sieve;
 
 use clap::Parser;

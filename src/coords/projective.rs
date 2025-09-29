@@ -1,33 +1,38 @@
-use crate::curve::{Curve, WeierstrassCurve};
-use std::{fmt::Display, ops::Neg};
+use crate::coords::{Curve, Point};
+use std::{fmt::Display, ops::Neg, rc::Rc};
 
 use rug::{Complete, Integer};
 
-pub trait Point<'c>: Display {
-    type CurveType: Curve;
+#[derive(Default, Clone)]
+pub struct WeierstrassCurve {
+    pub n: Integer,
+    pub a: Integer,
+    pub b: Integer,
+}
 
-    fn add(&self, rhs: &Self) -> Self;
+impl Curve for WeierstrassCurve {}
 
-    fn sub(&self, rhs: &Self) -> Self;
-
-    fn neg(&self) -> Self;
-
-    fn mul(&self, n: u64) -> Self;
-
-    fn curve(&self) -> &'c Self::CurveType;
+impl Display for WeierstrassCurve {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "curve y^2 = x^3 + {} * x + {} mod {} (Weierstrass form)",
+            &self.a, &self.b, &self.n
+        )
+    }
 }
 
 #[derive(Clone)]
-pub struct ProjPoint<'c> {
+pub struct ProjectivePt {
     pub x: Integer,
     pub y: Integer,
     pub z: Integer,
-    pub curve: &'c WeierstrassCurve,
+    pub curve: Rc<WeierstrassCurve>,
 }
 
-impl<'c> ProjPoint<'c> {
-    fn origin(curve: &'c WeierstrassCurve) -> ProjPoint<'c> {
-        ProjPoint {
+impl ProjectivePt {
+    fn origin(curve: Rc<WeierstrassCurve>) -> ProjectivePt {
+        ProjectivePt {
             x: Integer::from(0),
             y: Integer::from(1),
             z: Integer::from(0),
@@ -36,14 +41,35 @@ impl<'c> ProjPoint<'c> {
     }
 }
 
-impl<'c> Display for ProjPoint<'c> {
+impl Display for ProjectivePt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{} : {} : {}]", &self.x, &self.y, &self.z)
     }
 }
 
-impl<'c> Point<'c> for ProjPoint<'c> {
+impl Point for ProjectivePt {
     type CurveType = WeierstrassCurve;
+
+    fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+        loop {
+            let x = Integer::random_below_ref(n, rng).complete();
+            let y = Integer::random_below_ref(n, rng).complete();
+            let a = Integer::random_below_ref(n, rng).complete();
+            let b = (y.clone().square() - &x * (x.clone().square() + &a)) % n;
+
+            let discriminant: Integer = ((a.clone().square() * &a) << 2) + 27 * b.clone().square();
+
+            if discriminant.gcd(n) == 1 {
+                let curve = Rc::new(WeierstrassCurve { n: n.clone(), a, b });
+                return ProjectivePt {
+                    x,
+                    y,
+                    z: Integer::from(1),
+                    curve,
+                };
+            }
+        }
+    }
 
     fn add(&self, rhs: &Self) -> Self {
         let n = &self.curve.n;
@@ -75,17 +101,17 @@ impl<'c> Point<'c> for ProjPoint<'c> {
             n,
         );
 
-        ProjPoint {
+        ProjectivePt {
             x,
             y,
             z,
-            curve: self.curve,
+            curve: self.curve.clone(),
         }
     }
 
     fn mul(&self, n: u64) -> Self {
         if n == 0 {
-            return ProjPoint::origin(self.curve);
+            return ProjectivePt::origin(self.curve.clone());
         } else if n == 2 {
             let n = &self.curve.n;
 
@@ -105,11 +131,11 @@ impl<'c> Point<'c> for ProjPoint<'c> {
             let y_rhs = (nu_sq * &self.y) % n;
             let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
 
-            return ProjPoint {
+            return ProjectivePt {
                 x,
                 y,
                 z,
-                curve: self.curve,
+                curve: self.curve.clone(),
             };
         }
 
@@ -129,11 +155,11 @@ impl<'c> Point<'c> for ProjPoint<'c> {
     }
 
     fn neg(&self) -> Self {
-        ProjPoint {
+        ProjectivePt {
             x: self.x.clone(),
             y: (&self.y).neg().complete(),
             z: self.z.clone(),
-            curve: self.curve,
+            curve: self.curve.clone(),
         }
     }
 
@@ -141,8 +167,8 @@ impl<'c> Point<'c> for ProjPoint<'c> {
         self.add(&rhs.neg())
     }
 
-    fn curve(&self) -> &'c WeierstrassCurve {
-        self.curve
+    fn curve(&self) -> &WeierstrassCurve {
+        &self.curve
     }
 }
 
