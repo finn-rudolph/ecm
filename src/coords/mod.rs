@@ -21,4 +21,5 @@ pub trait Point: Display + Clone {
     fn z(&self) -> &Integer;
 }
 
+pub use montgomery::MontgomeryPoint;
 pub use projective::ProjectivePoint;

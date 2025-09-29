@@ -1,30 +1,47 @@
-use crate::coords::{Point, ProjectivePoint};
+use crate::coords::{MontgomeryPoint, Point, ProjectivePoint};
 use crate::sieve;
 
-use rug::Complete;
 use rug::{Integer, rand::RandState};
 
 pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Integer> {
-    assert!(b1 < b2, "stage 1 bound must be smaller than stage 2 bound");
+    assert!(b1 < b2);
 
-    let mut point = ProjectivePoint::new_curve(n, rng);
-    println!("point {}", &point);
-    println!("{}", point.curve());
+    let p = ProjectivePoint::new_curve(n, rng);
 
-    // stage 1
-    // TODO: take gcd rarely, only after stage
+    log::info!("using curve {}", p.curve());
+    log::info!("using point {}", p);
 
-    for u in sieve::primes(b1) {
-        let mut v = u;
-        while v <= b1 as u64 {
-            point = point.mul(u);
-            let g = n.gcd_ref(point.z()).complete();
-            if 1 < g && &g < n {
-                return Some(g);
-            }
-            v *= u;
-        }
-    }
+    let q = match stage_1(n, b1, p) {
+        Ok(factor) => return Some(factor),
+        Err(point) => point,
+    };
 
     None
 }
+
+fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
+    let mut g = Integer::from(1);
+
+    for prime in sieve::primes(b1) {
+        let mut prime_power = prime;
+        while prime_power <= b1 as u64 {
+            p = p.mul(prime);
+            g = (g * p.z()) % n;
+            prime_power *= prime;
+        }
+    }
+
+    log::info!("stage 1 finished");
+
+    g = g.gcd(n);
+    if 1 < g && g < *n {
+        Ok(g)
+    } else {
+        if g == *n {
+            log::warn!("gcd after stage 1 equals n");
+        }
+        Err(p)
+    }
+}
+
+fn montgomery_stage_2(n: &Integer, b2: usize, mut p: MontgomeryPoint) -> Option<Integer> {}

@@ -19,20 +19,24 @@ impl Display for MontgomeryCurve {
 }
 
 #[derive(Clone)]
-struct MontgomeryPoint {
+pub struct MontgomeryPoint {
     x: Integer,
     z: Integer,
     curve: Rc<MontgomeryCurve>,
 }
 
 impl MontgomeryPoint {
-    fn add_with_diff(&self, rhs: &MontgomeryPoint, diff: &MontgomeryPoint) -> MontgomeryPoint {
+    fn add_with_known_difference(
+        &self,
+        rhs: &MontgomeryPoint,
+        difference: &MontgomeryPoint,
+    ) -> MontgomeryPoint {
         let n = &self.curve.n;
 
         let x1x2_minus_z1z2 = ((&self.x * &rhs.x).complete() - (&self.z * &rhs.z)) % n;
-        let x = (diff.z() * (x1x2_minus_z1z2.square() % n)) % n;
+        let x = (difference.z() * (x1x2_minus_z1z2.square() % n)) % n;
         let x1z2_minus_x2z1 = ((&self.x * &rhs.z).complete() - (&self.z * &rhs.x)) % n;
-        let z = (diff.x() * (x1z2_minus_x2z1.square() % n)) % n;
+        let z = (difference.x() * (x1z2_minus_x2z1.square() % n)) % n;
 
         MontgomeryPoint {
             x,
@@ -113,16 +117,16 @@ impl Point for MontgomeryPoint {
         let b = 64 - n.leading_zeros();
         for i in (0..=b - 2).rev() {
             if (n >> i) & 1 == 1 {
-                u = t.add_with_diff(&u, self);
+                u = t.add_with_known_difference(&u, self);
                 t = t.mul(2);
             } else {
-                t = u.add_with_diff(&t, self);
+                t = u.add_with_known_difference(&t, self);
                 u = u.mul(2);
             }
         }
 
         if n & 1 == 1 {
-            u.add_with_diff(&t, self)
+            u.add_with_known_difference(&t, self)
         } else {
             u.mul(2)
         }
