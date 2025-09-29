@@ -11,9 +11,9 @@ struct Args {
     n: Integer,
 
     #[arg(long, help = "stage 1 smoothness bound")]
-    b1: usize,
+    b1: usize, // TODO: b1 even
 
-    #[arg(long, help = "stage 2 smoothness bound")]
+    #[arg(long, help = "stage 2 smoothness bound")] // TODO: default = 100 b1
     b2: usize,
 }
 

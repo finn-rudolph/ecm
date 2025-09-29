@@ -5,7 +5,7 @@ use rug::{Complete, Integer, az::UnwrappedAs, ops::Pow};
 use crate::coords::{Curve, Point};
 
 // a = 1, b = 0 implicitly
-struct MontgomeryCurve {
+pub struct MontgomeryCurve {
     n: Integer,
     c: Integer,
 }
@@ -26,7 +26,7 @@ pub struct MontgomeryPoint {
 }
 
 impl MontgomeryPoint {
-    fn add_with_known_difference(
+    pub fn add_with_known_difference(
         &self,
         rhs: &MontgomeryPoint,
         difference: &MontgomeryPoint,
@@ -48,6 +48,14 @@ impl MontgomeryPoint {
 
 impl Point for MontgomeryPoint {
     type CurveType = MontgomeryCurve;
+
+    fn origin(curve: Rc<Self::CurveType>) -> Self {
+        MontgomeryPoint {
+            x: Integer::from(0),
+            z: Integer::from(0),
+            curve,
+        }
+    }
 
     // The returned point may not lie on y^2 = x^3 + cx^2 + x, but instead on a twist.
     // We do not explicitly keep track of the twist.
@@ -132,7 +140,7 @@ impl Point for MontgomeryPoint {
         }
     }
 
-    fn curve(&self) -> &Self::CurveType {
+    fn curve_rc(&self) -> &Rc<Self::CurveType> {
         &self.curve
     }
 

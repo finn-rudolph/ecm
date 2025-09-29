@@ -3,7 +3,7 @@ use std::{fmt::Display, ops::Neg, rc::Rc};
 
 use rug::{Complete, Integer};
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct WeierstrassCurve {
     pub n: Integer,
     pub a: Integer,
@@ -31,15 +31,6 @@ pub struct ProjectivePoint {
 }
 
 impl ProjectivePoint {
-    fn origin(curve: Rc<WeierstrassCurve>) -> ProjectivePoint {
-        ProjectivePoint {
-            x: Integer::from(0),
-            y: Integer::from(1),
-            z: Integer::from(0),
-            curve,
-        }
-    }
-
     fn add(&self, rhs: &Self) -> Self {
         let n = &self.curve.n;
 
@@ -100,6 +91,15 @@ impl Display for ProjectivePoint {
 
 impl Point for ProjectivePoint {
     type CurveType = WeierstrassCurve;
+
+    fn origin(curve: Rc<WeierstrassCurve>) -> ProjectivePoint {
+        ProjectivePoint {
+            x: Integer::from(0),
+            y: Integer::from(1),
+            z: Integer::from(0),
+            curve,
+        }
+    }
 
     fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
         loop {
@@ -175,7 +175,7 @@ impl Point for ProjectivePoint {
         &self.z
     }
 
-    fn curve(&self) -> &WeierstrassCurve {
+    fn curve_rc(&self) -> &Rc<WeierstrassCurve> {
         &self.curve
     }
 }
