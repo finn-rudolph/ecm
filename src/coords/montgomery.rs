@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use rug::{Complete, Integer};
+use rug::{Complete, Integer, az::UnwrappedAs, ops::Pow};
 
 use crate::coords::{Curve, Point};
 
@@ -45,8 +45,41 @@ impl MontgomeryPoint {
 impl Point for MontgomeryPoint {
     type CurveType = MontgomeryCurve;
 
+    // The returned point may not lie on y^2 = x^3 + cx^2 + x, but instead on a twist.
+    // We do not explicitly keep track of the twist.
     fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
-        todo!()
+        loop {
+            let sigma = n.random_below_ref(rng).complete();
+            if sigma == 0 || sigma == 1 || sigma == 2 {
+                continue;
+            }
+
+            let u: Integer = (sigma.square_ref().complete() - 5) % n;
+            let v: Integer = (&sigma << 4u32).complete();
+            let u_cb: Integer = u.pow_mod_ref(&Integer::from(3), n).unwrap().complete();
+            let u_cb_v = (&u_cb * &v).complete();
+
+            if n.gcd_ref(&u_cb_v).complete() > 1 {
+                // TODO: logger
+                continue;
+            }
+
+            let u_cb_v_inv = (u_cb_v << 2u32).invert(n).unwrap();
+            let c = ((((&v - &u).complete().pow_mod(&Integer::from(3), n).unwrap()
+                * (3 * u + &v))
+                % n)
+                * u_cb_v_inv
+                - 2)
+                % n;
+
+            let curve = Rc::new(MontgomeryCurve { n: n.clone(), c });
+
+            return MontgomeryPoint {
+                x: u_cb,
+                z: v.pow_mod_ref(&Integer::from(3), n).unwrap().complete(),
+                curve,
+            };
+        }
     }
 
     fn mul(&self, n: u64) -> Self {

@@ -12,6 +12,7 @@ pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Int
     println!("{}", point.curve());
 
     // stage 1
+    // TODO: take gcd rarely, only after stage
 
     for u in sieve::primes(b1) {
         let mut v = u;
