@@ -11,6 +11,8 @@ pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Int
     let mut curve = WeierstrassCurve::default();
     let mut point = curve_selection::weierstrass(n, rng, &mut curve);
 
+    println!("{}", &curve);
+
     // stage 1
 
     for u in sieve::primes(b1) {

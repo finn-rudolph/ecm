@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use rug::Integer;
 
 pub trait Curve {}
@@ -10,3 +12,13 @@ pub struct WeierstrassCurve {
 }
 
 impl Curve for WeierstrassCurve {}
+
+impl Display for WeierstrassCurve {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "curve y^2 = x^3 + {} * x + {} mod {} (Weierstrass format)",
+            &self.a, &self.b, &self.n
+        )
+    }
+}

@@ -1,9 +1,9 @@
 use crate::curve::{Curve, WeierstrassCurve};
-use std::ops::Neg;
+use std::{fmt::Display, ops::Neg};
 
 use rug::{Complete, Integer};
 
-pub trait Point<'c> {
+pub trait Point<'c>: Display {
     type CurveType: Curve;
 
     fn add(&self, rhs: &Self) -> Self;
@@ -33,6 +33,12 @@ impl<'c> ProjPoint<'c> {
             z: Integer::from(0),
             curve,
         }
+    }
+}
+
+impl<'c> Display for ProjPoint<'c> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{} : {} : {}]", &self.x, &self.y, &self.z)
     }
 }
 
