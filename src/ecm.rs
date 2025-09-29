@@ -17,7 +17,7 @@ pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Int
         let mut v = u;
         while v <= b1 as u64 {
             point = point.mul(u);
-            let g = n.gcd_ref(&point.z).complete();
+            let g = n.gcd_ref(point.z()).complete();
             if 1 < g && &g < n {
                 return Some(g);
             }

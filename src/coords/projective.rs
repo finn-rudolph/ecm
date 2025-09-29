@@ -24,10 +24,10 @@ impl Display for WeierstrassCurve {
 
 #[derive(Clone)]
 pub struct ProjectivePt {
-    pub x: Integer,
-    pub y: Integer,
-    pub z: Integer,
-    pub curve: Rc<WeierstrassCurve>,
+    x: Integer,
+    y: Integer,
+    z: Integer,
+    curve: Rc<WeierstrassCurve>,
 }
 
 impl ProjectivePt {
@@ -165,6 +165,14 @@ impl Point for ProjectivePt {
 
     fn sub(&self, rhs: &Self) -> Self {
         self.add(&rhs.neg())
+    }
+
+    fn x(&self) -> &Integer {
+        &self.x
+    }
+
+    fn z(&self) -> &Integer {
+        &self.z
     }
 
     fn curve(&self) -> &WeierstrassCurve {

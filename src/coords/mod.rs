@@ -22,4 +22,8 @@ pub trait Point: Display {
     fn mul(&self, n: u64) -> Self;
 
     fn curve(&self) -> &Self::CurveType;
+
+    fn x(&self) -> &Integer;
+
+    fn z(&self) -> &Integer;
 }
