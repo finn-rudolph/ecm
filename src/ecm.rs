@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::coords::{MontgomeryPoint, Point};
 use crate::sieve;
 
@@ -27,8 +25,10 @@ fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
 
     for prime in sieve::primes(1, b1) {
         let mut prime_power = prime;
+        println!("prime : {}", prime);
         while prime_power <= b1 {
             p = p.mul(prime as u64);
+            println!("{}", p);
             g = (g * p.z()) % n;
             prime_power *= prime;
         }

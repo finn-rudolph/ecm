@@ -1,16 +1,27 @@
 use std::{fmt::Display, rc::Rc};
 
-use rug::{Complete, Integer, az::UnwrappedAs, ops::Pow};
+use rug::{Complete, Integer};
 
-use crate::coords::{Curve, Point};
+use crate::coords::{Curve, Point, ProjectivePoint, projective::WeierstrassCurve};
 
-// a = 1, b = 0 implicitly
+// y^2z = x^3 + cx^2z + xz^2
+#[derive(Clone, Debug)]
 pub struct MontgomeryCurve {
     n: Integer,
     c: Integer,
 }
 
-impl Curve for MontgomeryCurve {}
+impl MontgomeryCurve {
+    fn to_weierstrass(&self) -> WeierstrassCurve {
+        todo!()
+    }
+}
+
+impl Curve for MontgomeryCurve {
+    fn n(&self) -> &Integer {
+        &self.n
+    }
+}
 
 impl Display for MontgomeryCurve {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -18,7 +29,7 @@ impl Display for MontgomeryCurve {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MontgomeryPoint {
     x: Integer,
     z: Integer,
@@ -43,6 +54,10 @@ impl MontgomeryPoint {
             z,
             curve: self.curve.clone(),
         }
+    }
+
+    pub fn to_projective(&self, curve: Option<Rc<WeierstrassCurve>>) -> ProjectivePoint {
+        todo!()
     }
 }
 
@@ -71,8 +86,12 @@ impl Point for MontgomeryPoint {
             let u_cb: Integer = u.pow_mod_ref(&Integer::from(3), n).unwrap().complete();
             let u_cb_v = (&u_cb * &v).complete();
 
-            if n.gcd_ref(&u_cb_v).complete() > 1 {
-                // TODO: logger
+            let g = n.gcd_ref(&u_cb_v).complete();
+            if g > 1 {
+                log::warn!(
+                    "discovered nontrivial divisor of n during curve construction: {}",
+                    g
+                );
                 continue;
             }
 
@@ -94,16 +113,18 @@ impl Point for MontgomeryPoint {
         }
     }
 
-    fn mul(&self, n: u64) -> Self {
-        if n == 0 {
+    fn mul(&self, k: u64) -> Self {
+        if k == 0 {
             return MontgomeryPoint {
                 x: Integer::from(0),
                 z: Integer::from(0),
                 curve: self.curve.clone(),
             };
-        } else if n == 1 {
+        } else if k == 1 {
             return self.clone();
-        } else if n == 2 {
+        } else if k == 2 {
+            let n = self.n();
+
             let x1_sq = self.x.square_ref().complete();
             let z1_sq = self.z.square_ref().complete();
             let x1_z1 = (&self.x * &self.z).complete() % n;
@@ -122,9 +143,9 @@ impl Point for MontgomeryPoint {
         let mut u = self.clone();
         let mut t = self.mul(2);
 
-        let b = 64 - n.leading_zeros();
+        let b = 64 - k.leading_zeros();
         for i in (0..=b - 2).rev() {
-            if (n >> i) & 1 == 1 {
+            if (k >> i) & 1 == 1 {
                 u = t.add_with_known_difference(&u, self);
                 t = t.mul(2);
             } else {
@@ -133,7 +154,7 @@ impl Point for MontgomeryPoint {
             }
         }
 
-        if n & 1 == 1 {
+        if k & 1 == 1 {
             u.add_with_known_difference(&t, self)
         } else {
             u.mul(2)
@@ -156,5 +177,32 @@ impl Point for MontgomeryPoint {
 impl Display for MontgomeryPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{} : ? : {}]", &self.x, &self.z)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rug::rand::RandState;
+
+    use super::*;
+
+    #[test]
+    fn test_mul_2() {
+        // NOTE: over composite moduli, need the implementations be equivalent?
+        // (different addition chains)
+        let mut n = Integer::from(u128::MAX).next_prime();
+        let mut rng = RandState::new();
+
+        for _ in 0..42 {
+            for _ in 0..17 {
+                let p = MontgomeryPoint::new_curve(&n, &mut rng);
+                let p_proj = p.to_projective(None);
+                assert_eq!(
+                    p.mul(2).to_projective(Some(p_proj.curve_rc().clone())),
+                    p_proj.mul(2)
+                );
+            }
+            n = (n + 1u32).next_prime();
+        }
     }
 }

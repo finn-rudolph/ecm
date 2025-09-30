@@ -3,14 +3,19 @@ use std::{fmt::Display, ops::Neg, rc::Rc};
 
 use rug::{Complete, Integer};
 
-#[derive(Clone)]
+// y^2z = x^3 + axz^2 + bz^3
+#[derive(Clone, Debug)]
 pub struct WeierstrassCurve {
     pub n: Integer,
     pub a: Integer,
     pub b: Integer,
 }
 
-impl Curve for WeierstrassCurve {}
+impl Curve for WeierstrassCurve {
+    fn n(&self) -> &Integer {
+        &self.n
+    }
+}
 
 impl Display for WeierstrassCurve {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,7 +27,7 @@ impl Display for WeierstrassCurve {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProjectivePoint {
     x: Integer,
     y: Integer,
@@ -89,6 +94,21 @@ impl Display for ProjectivePoint {
     }
 }
 
+impl PartialEq for ProjectivePoint {
+    fn eq(&self, rhs: &Self) -> bool {
+        // TODO: this currently only works for fields.
+        if !Rc::ptr_eq(self.curve_rc(), rhs.curve_rc()) {
+            false
+        } else {
+            let n = self.n();
+            (&self.x * &rhs.z).complete() % n == (&self.z * &rhs.x).complete() % n
+                && (&self.y * &rhs.z).complete() % n == (&self.z * &rhs.y).complete() % n
+        }
+    }
+}
+
+impl Eq for ProjectivePoint {}
+
 impl Point for ProjectivePoint {
     type CurveType = WeierstrassCurve;
 
@@ -122,10 +142,10 @@ impl Point for ProjectivePoint {
         }
     }
 
-    fn mul(&self, n: u64) -> Self {
-        if n == 0 {
+    fn mul(&self, k: u64) -> Self {
+        if k == 0 {
             return ProjectivePoint::origin(self.curve.clone());
-        } else if n == 2 {
+        } else if k == 2 {
             let n = &self.curve.n;
 
             let lambda: Integer = ((&self.x * &self.y).complete() << 1) % n;
@@ -153,14 +173,14 @@ impl Point for ProjectivePoint {
         }
 
         let mut q = self.clone();
-        let m = 3 * n;
+        let m = 3 * k;
         let b = 64 - m.leading_zeros();
         for i in (1..=b - 2).rev() {
             q = q.mul(2);
-            let (m_i, n_i) = ((m >> i) & 1, (n >> i) & 1);
-            if (m_i, n_i) == (1, 0) {
+            let (m_i, k_i) = ((m >> i) & 1, (k >> i) & 1);
+            if (m_i, k_i) == (1, 0) {
                 q = q.add(self);
-            } else if (m_i, n_i) == (0, 1) {
+            } else if (m_i, k_i) == (0, 1) {
                 q = q.sub(self);
             }
         }
