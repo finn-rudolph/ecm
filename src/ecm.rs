@@ -1,4 +1,4 @@
-use crate::coords::{MontgomeryPoint, Point, ProjectivePoint};
+use crate::coords::{MontgomeryPoint, Point};
 use crate::sieve;
 
 use rug::Complete;
