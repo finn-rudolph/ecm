@@ -11,6 +11,8 @@ pub fn primes(lower_bound: usize, upper_bound: usize) -> Vec<usize> {
         }
     }
 
-    let begin = primes.binary_search(&lower_bound).unwrap();
+    let bs_result = primes.binary_search(&lower_bound);
+    let begin = bs_result.unwrap_or(bs_result.unwrap_err());
+
     primes.into_iter().skip(begin).collect()
 }

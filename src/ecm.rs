@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::coords::{MontgomeryPoint, Point};
 use crate::sieve;
 
@@ -5,17 +7,17 @@ use rug::Complete;
 use rug::{Integer, rand::RandState};
 
 pub fn ecm(n: &Integer, b1: usize, b2: usize, d: usize, rng: &mut RandState) -> Option<Integer> {
-    assert!(b1 < b2);
-
     let p = MontgomeryPoint::new_curve(n, rng);
 
-    log::info!("using curve {}", p.curve());
-    log::info!("using point {}", p);
+    log::info!("curve: {}", p.curve());
+    log::info!("point: {}", p);
 
     let q = match stage_1(n, b1, p) {
         Ok(factor) => return Some(factor),
         Err(point) => point,
     };
+
+    log::info!("point after stage 1: {}", q);
 
     montgomery_stage_2(n, b1, b2, d, q)
 }
@@ -32,7 +34,7 @@ fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
         }
     }
 
-    log::info!("stage 1 finished");
+    log::info!("finished stage 1");
 
     g = g.gcd(n);
     if 1 < g && g < *n {
@@ -68,7 +70,7 @@ fn montgomery_stage_2(
             multiples_of_2p[i - 1]
                 .add_with_known_difference(&multiples_of_2p[1], &multiples_of_2p[i - 2]),
         );
-        xz[i] = (multiples_of_2p[i].x() * multiples_of_2p[i].z()).complete();
+        xz.push((multiples_of_2p[i].x() * multiples_of_2p[i].z()).complete());
     }
 
     let mut g = Integer::from(1);
@@ -108,6 +110,8 @@ fn montgomery_stage_2(
         base = curr_base.add_with_known_difference(&multiples_of_2p[d], &previous_base);
         previous_base = curr_base;
     }
+
+    log::info!("finished stage 2");
 
     if 1 < g && g < *n {
         Some(g)

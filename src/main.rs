@@ -2,7 +2,10 @@ mod coords;
 mod ecm;
 mod sieve;
 
+use std::env;
 use std::process;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use clap::Parser;
 use rug::{Integer, rand::RandState};
@@ -45,11 +48,23 @@ impl Args {
 }
 
 fn main() {
+    if env::var("RUST_LOG").is_err() {
+        unsafe { env::set_var("RUST_LOG", "info") }
+    }
+    env_logger::init();
+
     let mut args = Args::parse();
     args.validate();
     args.choose_defaults();
 
     let mut rng = RandState::new();
+    rng.seed(
+        &SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .into(),
+    );
 
     match ecm::ecm(
         &args.n,
