@@ -15,13 +15,16 @@ struct Args {
 
     #[arg(long, help = "stage 2 smoothness bound")] // TODO: default = 100 b1
     b2: usize,
+
+    #[arg(short, long, help = "stage 2 step size")]
+    d: usize,
 }
 
 fn main() {
     let args = Args::parse();
 
     let mut rng = RandState::new();
-    match ecm::ecm(&args.n, args.b1, args.b2, &mut rng) {
+    match ecm::ecm(&args.n, args.b1, args.b2, args.d, &mut rng) {
         Some(factor) => println!("factor found: {factor}"),
         None => println!("no factor found"),
     }

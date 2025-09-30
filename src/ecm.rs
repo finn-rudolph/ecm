@@ -4,10 +4,10 @@ use crate::sieve;
 use rug::Complete;
 use rug::{Integer, rand::RandState};
 
-pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Integer> {
+pub fn ecm(n: &Integer, b1: usize, b2: usize, d: usize, rng: &mut RandState) -> Option<Integer> {
     assert!(b1 < b2);
 
-    let p = ProjectivePoint::new_curve(n, rng);
+    let p = MontgomeryPoint::new_curve(n, rng);
 
     log::info!("using curve {}", p.curve());
     log::info!("using point {}", p);
@@ -17,16 +17,16 @@ pub fn ecm(n: &Integer, b1: usize, b2: usize, rng: &mut RandState) -> Option<Int
         Err(point) => point,
     };
 
-    None
+    montgomery_stage_2(n, b1, b2, d, q)
 }
 
 fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
     let mut g = Integer::from(1);
 
-    for prime in sieve::primes(b1) {
+    for prime in sieve::primes(1, b1) {
         let mut prime_power = prime;
-        while prime_power <= b1 as u64 {
-            p = p.mul(prime);
+        while prime_power <= b1 {
+            p = p.mul(prime as u64);
             g = (g * p.z()) % n;
             prime_power *= prime;
         }
@@ -72,11 +72,42 @@ fn montgomery_stage_2(
     }
 
     let mut g = Integer::from(1);
-    let b = b1 as u64 - 1;
-    let t = p.mul(b - 2 * d as u64);
-    let r = p.mul(b);
+    let b = b1 - 1;
+    assert!(b & 1 == 1); // so we hit primes
+    let mut previous_base = p.mul((b - 2 * d) as u64);
+    let mut base = p.mul(b as u64); // r * p, the point we move 2d steps forward
 
-    for r in (b as usize..b2).step_by(2 * d) {}
+    let primes = sieve::primes(b, b2);
+    let mut prime_iter = primes.iter();
+
+    for r in (b..b2).step_by(2 * d) {
+        let base_xz = (base.x() * base.z()).complete() % n;
+
+        let mut q = match prime_iter.next() {
+            Some(q) => *q,
+            None => break,
+        };
+
+        while q <= (r + 2 * d) {
+            let diff_to_base = (q - r) >> 1;
+            g = (g
+                * (((base.x() - multiples_of_2p[diff_to_base].x()).complete()
+                    * (base.z() + multiples_of_2p[diff_to_base].z()).complete())
+                    % n
+                    - &base_xz
+                    + &xz[diff_to_base]))
+                % n;
+
+            q = match prime_iter.next() {
+                Some(q) => *q,
+                None => break,
+            };
+        }
+
+        let curr_base = base;
+        base = curr_base.add_with_known_difference(&multiples_of_2p[d], &previous_base);
+        previous_base = curr_base;
+    }
 
     if 1 < g && g < *n {
         Some(g)
