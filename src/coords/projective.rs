@@ -121,7 +121,7 @@ impl Point for ProjectivePoint {
         }
     }
 
-    fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+    fn random_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
         loop {
             let x = Integer::random_below_ref(n, rng).complete();
             let y = Integer::random_below_ref(n, rng).complete();
@@ -141,7 +141,6 @@ impl Point for ProjectivePoint {
             }
         }
     }
-
     fn mul(&self, k: u64) -> Self {
         if k == 0 {
             return ProjectivePoint::origin(self.curve.clone());

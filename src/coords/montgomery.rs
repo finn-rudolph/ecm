@@ -56,6 +56,41 @@ impl MontgomeryPoint {
         }
     }
 
+    pub fn new_curve(n: &Integer, sigma: &Integer) -> Option<Self> {
+        if *sigma == 0 || *sigma == 1 || *sigma == 2 {
+            return None;
+        }
+
+        let u: Integer = (sigma.square_ref().complete() - 5) % n;
+        let v: Integer = (sigma << 4u32).complete();
+        let u_cb: Integer = u.pow_mod_ref(&Integer::from(3), n).unwrap().complete();
+        let u_cb_v = (&u_cb * &v).complete();
+
+        let g = n.gcd_ref(&u_cb_v).complete();
+        if g > 1 {
+            log::warn!(
+                "discovered nontrivial divisor of n during curve construction: {}",
+                g
+            );
+            return None;
+        }
+
+        let u_cb_v_inv = (u_cb_v << 2u32).invert(n).unwrap();
+        let c = ((((&v - &u).complete().pow_mod(&Integer::from(3), n).unwrap() * (3 * u + &v))
+            % n)
+            * u_cb_v_inv
+            - 2)
+            % n;
+
+        let curve = Rc::new(MontgomeryCurve { n: n.clone(), c });
+
+        Some(MontgomeryPoint {
+            x: u_cb,
+            z: v.pow_mod_ref(&Integer::from(3), n).unwrap().complete(),
+            curve,
+        })
+    }
+
     pub fn to_projective(&self, curve: Option<Rc<WeierstrassCurve>>) -> ProjectivePoint {
         todo!()
     }
@@ -74,42 +109,13 @@ impl Point for MontgomeryPoint {
 
     // The returned point may not lie on y^2 = x^3 + cx^2 + x, but instead on a twist.
     // We do not explicitly keep track of the twist.
-    fn new_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+    fn random_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
         loop {
             let sigma = n.random_below_ref(rng).complete();
-            if sigma == 0 || sigma == 1 || sigma == 2 {
-                continue;
+            if let Some(point) = MontgomeryPoint::new_curve(n, &sigma) {
+                log::debug!("σ = {}", sigma);
+                return point;
             }
-
-            let u: Integer = (sigma.square_ref().complete() - 5) % n;
-            let v: Integer = (&sigma << 4u32).complete();
-            let u_cb: Integer = u.pow_mod_ref(&Integer::from(3), n).unwrap().complete();
-            let u_cb_v = (&u_cb * &v).complete();
-
-            let g = n.gcd_ref(&u_cb_v).complete();
-            if g > 1 {
-                log::warn!(
-                    "discovered nontrivial divisor of n during curve construction: {}",
-                    g
-                );
-                continue;
-            }
-
-            let u_cb_v_inv = (u_cb_v << 2u32).invert(n).unwrap();
-            let c = ((((&v - &u).complete().pow_mod(&Integer::from(3), n).unwrap()
-                * (3 * u + &v))
-                % n)
-                * u_cb_v_inv
-                - 2)
-                % n;
-
-            let curve = Rc::new(MontgomeryCurve { n: n.clone(), c });
-
-            return MontgomeryPoint {
-                x: u_cb,
-                z: v.pow_mod_ref(&Integer::from(3), n).unwrap().complete(),
-                curve,
-            };
         }
     }
 
@@ -186,6 +192,10 @@ mod test {
 
     use super::*;
 
+    fn points_equal(p: &MontgomeryPoint, q: &ProjectivePoint) -> bool {
+        todo!()
+    }
+
     #[test]
     fn test_mul_2() {
         // NOTE: over composite moduli, need the implementations be equivalent?
@@ -195,12 +205,9 @@ mod test {
 
         for _ in 0..42 {
             for _ in 0..17 {
-                let p = MontgomeryPoint::new_curve(&n, &mut rng);
+                let p = MontgomeryPoint::random_curve(&n, &mut rng);
                 let p_proj = p.to_projective(None);
-                assert_eq!(
-                    p.mul(2).to_projective(Some(p_proj.curve_rc().clone())),
-                    p_proj.mul(2)
-                );
+                assert!(points_equal(&p.mul(2), &p_proj.mul(2)));
             }
             n = (n + 1u32).next_prime();
         }

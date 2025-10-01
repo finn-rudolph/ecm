@@ -14,7 +14,7 @@ pub trait Point: Display + Clone {
 
     fn origin(curve: Rc<Self::CurveType>) -> Self;
 
-    fn new_curve(n: &Integer, rng: &mut RandState) -> Self;
+    fn random_curve(n: &Integer, rng: &mut RandState) -> Self;
 
     fn mul(&self, k: u64) -> Self;
 

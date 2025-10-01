@@ -2,21 +2,18 @@ use crate::coords::{MontgomeryPoint, Point};
 use crate::sieve;
 
 use rug::Complete;
-use rug::{Integer, rand::RandState};
+use rug::Integer;
 
-pub fn ecm(n: &Integer, b1: usize, b2: usize, d: usize, rng: &mut RandState) -> Option<Integer> {
-    let p = MontgomeryPoint::new_curve(n, rng);
-
-    log::info!("curve: {}", p.curve());
-    log::info!("point: {}", p);
+pub fn ecm(n: &Integer, b1: usize, b2: usize, d: usize, p: MontgomeryPoint) -> Option<Integer> {
+    log::info!("using curve {}", p.curve());
+    log::info!("using initial point {}", p);
 
     let q = match stage_1(n, b1, p) {
         Ok(factor) => return Some(factor),
         Err(point) => point,
     };
 
-    log::info!("point after stage 1: {}", q);
-
+    log::info!("beginning stage 2 from {}", q);
     montgomery_stage_2(n, b1, b2, d, q)
 }
 
@@ -25,10 +22,8 @@ fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
 
     for prime in sieve::primes(1, b1) {
         let mut prime_power = prime;
-        println!("prime : {}", prime);
         while prime_power <= b1 {
             p = p.mul(prime as u64);
-            println!("{}", p);
             g = (g * p.z()) % n;
             prime_power *= prime;
         }
@@ -112,6 +107,7 @@ fn montgomery_stage_2(
     }
 
     log::info!("finished stage 2");
+    g = g.gcd(n);
 
     if 1 < g && g < *n {
         Some(g)
