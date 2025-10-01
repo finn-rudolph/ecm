@@ -4,6 +4,9 @@ mod sieve;
 
 use std::env;
 use std::process;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -29,6 +32,9 @@ struct Args {
 
     #[arg(long, help = "curve selection paramter")]
     sigma: Option<Integer>,
+
+    #[arg(short, long, help = "the number of threads to use")]
+    threads: Option<usize>,
 }
 
 impl Args {
@@ -49,6 +55,12 @@ impl Args {
         }
         if self.d.is_none() {
             self.d = Some(B2B1_RATIO);
+        }
+        if self.threads.is_none() {
+            self.threads = Some(match thread::available_parallelism() {
+                Ok(t) => t.get(),
+                Err(_) => 1,
+            });
         }
     }
 }
@@ -83,23 +95,39 @@ fn main() {
         return;
     }
 
-    let mut rng = RandState::new();
-    rng.seed(
-        &SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-            .into(),
-    );
+    let num_threads = args.threads.unwrap();
+    log::info!("using {} threads", num_threads);
 
-    match ecm::ecm(
-        &args.n,
-        args.b1,
-        args.b2.unwrap(),
-        args.d.unwrap(),
-        MontgomeryPoint::random_curve(&args.n, &mut rng),
-    ) {
-        Some(factor) => println!("factor found: {factor}"),
-        None => println!("no factor found"),
-    }
+    let finished = AtomicBool::new(false);
+
+    thread::scope(|s| {
+        for _ in 0..num_threads {
+            s.spawn(|| {
+                let mut rng = RandState::new();
+                rng.seed(
+                    &SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                        .into(),
+                );
+
+                while !finished.load(Ordering::Relaxed) {
+                    match ecm::ecm(
+                        &args.n,
+                        args.b1,
+                        args.b2.unwrap(),
+                        args.d.unwrap(),
+                        MontgomeryPoint::random_curve(&args.n, &mut rng),
+                    ) {
+                        Some(factor) => {
+                            println!("factor found: {factor}");
+                            finished.store(true, Ordering::Relaxed);
+                        }
+                        None => println!("no factor found"),
+                    }
+                }
+            });
+        }
+    });
 }
