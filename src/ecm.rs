@@ -13,7 +13,7 @@ pub fn ecm(
     sieve: &Sieve,
 ) -> Option<Integer> {
     log::info!("using curve {}", p.curve());
-    log::debug!("using initial point {}", p);
+    log::info!("using initial point {}", p);
 
     let q = match stage_1(n, b1, p, sieve) {
         Ok(factor) => return Some(factor),

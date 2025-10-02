@@ -14,7 +14,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use clap::Parser;
-use env_logger::fmt::style::{Color, RgbColor, Style};
+use env_logger::fmt::style::{Color, Effects, RgbColor, Style};
 use rug::{Integer, rand::RandState};
 
 use crate::coords::MontgomeryPoint;
