@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 use rug::{Complete, Integer};
 
-use crate::coords::{Curve, Point, ProjectivePoint, projective::WeierstrassCurve};
+use crate::coords::{Curve, Point};
 
 // y^2z = x^3 + cx^2z + xz^2
 #[derive(Clone, Debug)]
@@ -11,11 +11,7 @@ pub struct MontgomeryCurve {
     c: Integer,
 }
 
-impl MontgomeryCurve {
-    fn to_weierstrass(&self) -> WeierstrassCurve {
-        todo!()
-    }
-}
+impl MontgomeryCurve {}
 
 impl Curve for MontgomeryCurve {
     fn n(&self) -> &Integer {
@@ -56,7 +52,7 @@ impl MontgomeryPoint {
         }
     }
 
-    pub fn new_curve(n: &Integer, sigma: &Integer) -> Option<Self> {
+    pub fn from_sigma(n: &Integer, sigma: &Integer) -> Option<Self> {
         if *sigma == 0 || *sigma == 1 || *sigma == 2 {
             return None;
         }
@@ -90,10 +86,6 @@ impl MontgomeryPoint {
             curve,
         })
     }
-
-    pub fn to_projective(&self, curve: Option<Rc<WeierstrassCurve>>) -> ProjectivePoint {
-        todo!()
-    }
 }
 
 impl Point for MontgomeryPoint {
@@ -109,10 +101,10 @@ impl Point for MontgomeryPoint {
 
     // The returned point may not lie on y^2 = x^3 + cx^2 + x, but instead on a twist.
     // We do not explicitly keep track of the twist.
-    fn random_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+    fn random(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
         loop {
             let sigma = n.random_below_ref(rng).complete();
-            if let Some(point) = MontgomeryPoint::new_curve(n, &sigma) {
+            if let Some(point) = MontgomeryPoint::from_sigma(n, &sigma) {
                 log::debug!("σ = {}", sigma);
                 return point;
             }
@@ -188,13 +180,31 @@ impl Display for MontgomeryPoint {
 
 #[cfg(test)]
 mod test {
-    use rug::rand::RandState;
+    use rug::{integer::IntegerExt64, rand::RandState};
+
+    use crate::coords::{ProjectivePoint, projective::WeierstrassCurve};
 
     use super::*;
 
     fn points_equal(p: &MontgomeryPoint, q: &ProjectivePoint) -> bool {
         todo!()
     }
+
+    fn sqrt_mod_p(a: &Integer, p: &Integer) -> Integer {
+        assert!(p.mod_u64(4) == 3);
+        todo!()
+    }
+
+    // fn eq(&self, rhs: &Self) -> bool {
+    //     // TODO: this currently only works for fields.
+    //     if !Rc::ptr_eq(self.curve_rc(), rhs.curve_rc()) {
+    //         false
+    //     } else {
+    //         let n = self.n();
+    //         (&self.x * &rhs.z).complete() % n == (&self.z * &rhs.x).complete() % n
+    //             && (&self.y * &rhs.z).complete() % n == (&self.z * &rhs.y).complete() % n
+    //     }
+    // }
 
     #[test]
     fn test_mul_2() {
@@ -204,10 +214,42 @@ mod test {
         let mut rng = RandState::new();
 
         for _ in 0..42 {
+            // we have to compute a finite field sqrt to obtain the y coordinate
+            while n.mod_u64(4) == 1 {
+                n = (n + 1u32).next_prime();
+            }
+
             for _ in 0..17 {
-                let p = MontgomeryPoint::random_curve(&n, &mut rng);
-                let p_proj = p.to_projective(None);
-                assert!(points_equal(&p.mul(2), &p_proj.mul(2)));
+                let (p, y_sq) = loop {
+                    let p = MontgomeryPoint::random(&n, &mut rng);
+                    if p.z().is_zero() {
+                        continue;
+                    }
+                    let y_sq =
+                        (p.x() * (1u32 + (p.x() * (&p.curve().c + p.x()).complete()) % &n)) % &n;
+
+                    if y_sq.legendre(&n) != 1i32 {
+                        break (p, y_sq);
+                    }
+                };
+
+                let y = y_sq.pow_mod(&((&n + 1u32).complete() >> 2), &n).unwrap();
+
+                // x -> x - c/3
+                // y -> y
+
+                let c_sq = p.curve().c.square_ref().complete();
+                let one_third = Integer::from(3).invert(&n).unwrap();
+                let minus_c_over_3 = (&c_sq * -one_third) % &n;
+                let a = Integer::from(1) + &minus_c_over_3;
+                let mut b = minus_c_over_3.clone();
+                let c_sq_over_9 = minus_c_over_3.square_ref().complete();
+                b += &c_sq_over_9;
+                b += c_sq_over_9 * &minus_c_over_3;
+
+                let proj_p =
+                    ProjectivePoint::new(n.clone(), a, b, p.x() - minus_c_over_3, y, 1.into());
+                // assert!(points_equal(&p.mul(2), &p_proj.mul(2)));
             }
             n = (n + 1u32).next_prime();
         }

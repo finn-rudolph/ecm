@@ -6,9 +6,15 @@ use rug::{Complete, Integer};
 // y^2z = x^3 + axz^2 + bz^3
 #[derive(Clone, Debug)]
 pub struct WeierstrassCurve {
-    pub n: Integer,
-    pub a: Integer,
-    pub b: Integer,
+    n: Integer,
+    a: Integer,
+    b: Integer,
+}
+
+impl WeierstrassCurve {
+    pub fn new(n: Integer, a: Integer, b: Integer) -> Self {
+        WeierstrassCurve { n, a, b }
+    }
 }
 
 impl Curve for WeierstrassCurve {
@@ -36,6 +42,18 @@ pub struct ProjectivePoint {
 }
 
 impl ProjectivePoint {
+    pub fn new(
+        n: Integer,
+        a: Integer,
+        b: Integer,
+        x: Integer,
+        y: Integer,
+        z: Integer,
+    ) -> ProjectivePoint {
+        let curve = Rc::new(WeierstrassCurve::new(n, a, b));
+        ProjectivePoint { x, y, z, curve }
+    }
+
     fn add(&self, rhs: &Self) -> Self {
         let n = &self.curve.n;
 
@@ -94,21 +112,6 @@ impl Display for ProjectivePoint {
     }
 }
 
-impl PartialEq for ProjectivePoint {
-    fn eq(&self, rhs: &Self) -> bool {
-        // TODO: this currently only works for fields.
-        if !Rc::ptr_eq(self.curve_rc(), rhs.curve_rc()) {
-            false
-        } else {
-            let n = self.n();
-            (&self.x * &rhs.z).complete() % n == (&self.z * &rhs.x).complete() % n
-                && (&self.y * &rhs.z).complete() % n == (&self.z * &rhs.y).complete() % n
-        }
-    }
-}
-
-impl Eq for ProjectivePoint {}
-
 impl Point for ProjectivePoint {
     type CurveType = WeierstrassCurve;
 
@@ -121,7 +124,7 @@ impl Point for ProjectivePoint {
         }
     }
 
-    fn random_curve(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
+    fn random(n: &Integer, rng: &mut rug::rand::RandState) -> Self {
         loop {
             let x = Integer::random_below_ref(n, rng).complete();
             let y = Integer::random_below_ref(n, rng).complete();
