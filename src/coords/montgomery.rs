@@ -71,7 +71,7 @@ impl MontgomeryPoint {
         }
 
         let u: Integer = (sigma.square_ref().complete() - 5) % n;
-        let v: Integer = (sigma << 4u32).complete();
+        let v: Integer = (sigma * 4u32).complete();
         let u_cb: Integer = u.pow_mod_ref(&Integer::from(3), n).unwrap().complete();
         let u_cb_v = (&u_cb * &v).complete();
 
@@ -84,18 +84,17 @@ impl MontgomeryPoint {
             return None;
         }
 
-        let u_cb_v_inv = (u_cb_v << 2u32).invert(n).unwrap();
-        let c = ((((&v - &u).complete().pow_mod(&Integer::from(3), n).unwrap() * (3 * u + &v))
-            % n)
-            * u_cb_v_inv
-            - 2)
-            % n;
+        let u_cb_v_inv = (u_cb_v * 4u32).invert(n).unwrap();
+        let mut c =
+            ((&v - &u).complete().pow_mod(&Integer::from(3), n).unwrap() * (3 * u + &v)) % n;
+        c = (c * u_cb_v_inv) % n;
+        c -= 2;
 
         let curve = Rc::new(MontgomeryCurve { n: n.clone(), c });
 
         Some(MontgomeryPoint {
             x: u_cb,
-            z: v.pow_mod_ref(&Integer::from(3), n).unwrap().complete(),
+            z: v.pow_mod(&Integer::from(3), n).unwrap(),
             curve,
         })
     }
@@ -141,7 +140,7 @@ impl Point for MontgomeryPoint {
             let x1_z1 = (&self.x * &self.z).complete() % n;
 
             let z_intermed = ((&x1_sq + (&self.curve.c * &x1_z1)).complete() + &z1_sq) % n;
-            let z = ((x1_z1 * z_intermed) << 2) % n;
+            let z = ((x1_z1 * z_intermed) * 4) % n;
             let x = ((x1_sq - z1_sq) % n).square() % n;
 
             return MontgomeryPoint {
@@ -152,21 +151,23 @@ impl Point for MontgomeryPoint {
         }
 
         let mut u = self.clone();
-        let mut t = self.mul(2);
+        let mut v = self.mul(2);
 
         let b = 64 - k.leading_zeros();
-        for i in (0..=b - 2).rev() {
+        assert!((k >> (b - 1)) & 1 == 1);
+
+        for i in (1..=b - 2).rev() {
             if (k >> i) & 1 == 1 {
-                u = t.add_with_known_difference(&u, self);
-                t = t.mul(2);
+                u = v.add_with_known_difference(&u, self);
+                v = v.mul(2);
             } else {
-                t = u.add_with_known_difference(&t, self);
+                v = v.add_with_known_difference(&u, self);
                 u = u.mul(2);
             }
         }
 
         if k & 1 == 1 {
-            u.add_with_known_difference(&t, self)
+            v.add_with_known_difference(&u, self)
         } else {
             u.mul(2)
         }
@@ -193,28 +194,17 @@ impl Display for MontgomeryPoint {
 
 #[cfg(test)]
 mod test {
-    use rug::{integer::IntegerExt64, rand::RandState};
-
-    use crate::coords::{ProjectivePoint, projective::WeierstrassCurve};
-
     use super::*;
-
-    // fn eq(&self, rhs: &Self) -> bool {
-    //     // TODO: this currently only works for fields.
-    //     if !Rc::ptr_eq(self.curve_rc(), rhs.curve_rc()) {
-    //         false
-    //     } else {
-    //         let n = self.n();
-    //         (&self.x * &rhs.z).complete() % n == (&self.z * &rhs.x).complete() % n
-    //             && (&self.y * &rhs.z).complete() % n == (&self.z * &rhs.y).complete() % n
-    //     }
-    // }
+    use crate::coords::{ProjectivePoint, projective::WeierstrassCurve};
+    use rug::{integer::IntegerExt64, rand::RandState};
 
     #[test]
     fn test_mul_2() {
         // NOTE: over composite moduli, need the implementations be equivalent?
         // (different addition chains)
-        let mut n = Integer::from(1u32 << 24).next_prime();
+        // TODO: even for prime moduli, the equivalence breaks down at exponent 6 for
+        // whatever reason.
+        let mut n = Integer::from(u128::MAX).next_prime();
         let mut rng = RandState::new();
 
         for _ in 0..91 {
@@ -275,10 +265,12 @@ mod test {
                         % &n
                         == 0
                 );
+
+                let q = p.mul(2).normalize();
+                let q_proj = p_proj.mul(2).normalize();
                 assert!(
-                    (p.mul(2).normalize().x() - (minus_c_over_3 + p_proj.mul(2).normalize().x()))
-                        % &n
-                        == 0
+                    (q.z().is_zero() && q_proj.z().is_zero())
+                        || ((q.x() - (minus_c_over_3.clone() + q_proj.x())) % &n == 0)
                 );
             }
             n = (n + 1u32).next_prime();

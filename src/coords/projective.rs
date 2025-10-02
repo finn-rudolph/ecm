@@ -137,7 +137,7 @@ impl Point for ProjectivePoint {
             let a = Integer::random_below_ref(n, rng).complete();
             let b = (y.clone().square() - &x * (x.clone().square() + &a)) % n;
 
-            let discriminant: Integer = ((a.clone().square() * &a) << 2) + 27 * b.clone().square();
+            let discriminant: Integer = ((a.clone().square() * &a) * 4) + 27 * b.clone().square();
 
             if discriminant.gcd(n) == 1 {
                 let curve = Rc::new(WeierstrassCurve { n: n.clone(), a, b });
@@ -156,21 +156,21 @@ impl Point for ProjectivePoint {
         } else if k == 2 {
             let n = &self.curve.n;
 
-            let lambda: Integer = ((&self.x * &self.y).complete() << 1) % n;
-            let nu: Integer = ((&self.y * &self.z).complete() << 1) % n;
+            let lambda: Integer = ((&self.x * &self.y).complete() * 2) % n;
+            let nu: Integer = ((&self.y * &self.z).complete() * 2) % n;
             let mu: Integer =
                 (3 * self.x.clone().square() + &self.curve.a * self.z.clone().square()) % n;
 
             let mu_sq = mu.clone().square();
             let nu_sq = nu.clone().square() % n;
             let lambda_nu: Integer = lambda * &nu;
-            let two_lambda_nu: Integer = Complete::complete(&lambda_nu << 1);
+            let two_lambda_nu: Integer = Complete::complete(&lambda_nu * 2);
 
             let y_lhs = mu * ((&two_lambda_nu + lambda_nu - &mu_sq) % n);
             let x: Integer = (&nu * (&mu_sq - two_lambda_nu)) % n;
             let z = &nu_sq * nu;
             let y_rhs = (nu_sq * &self.y) % n;
-            let y = (y_lhs - ((y_rhs * &self.y) << 1)) % n;
+            let y = (y_lhs - ((y_rhs * &self.y) * 2)) % n;
 
             return ProjectivePoint {
                 x,
