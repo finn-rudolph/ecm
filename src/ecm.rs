@@ -1,29 +1,36 @@
 use crate::coords::{MontgomeryPoint, Point};
-use crate::sieve;
+use crate::sieve::Sieve;
 
 use rug::Complete;
 use rug::Integer;
 
-pub fn ecm(n: &Integer, b1: usize, b2: usize, d: usize, p: MontgomeryPoint) -> Option<Integer> {
+pub fn ecm(
+    n: &Integer,
+    b1: usize,
+    b2: usize,
+    d: usize,
+    p: MontgomeryPoint,
+    sieve: &Sieve,
+) -> Option<Integer> {
     log::info!("using curve {}", p.curve());
     log::info!("using initial point {}", p);
 
-    let q = match stage_1(n, b1, p) {
+    let q = match stage_1(n, b1, p, sieve) {
         Ok(factor) => return Some(factor),
         Err(point) => point,
     };
 
     log::info!("beginning stage 2 from {}", q);
-    montgomery_stage_2(n, b1, b2, d, q)
+    montgomery_stage_2(n, b1, b2, d, q, sieve)
 }
 
-fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T) -> Result<Integer, T> {
+fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T, sieve: &Sieve) -> Result<Integer, T> {
     let mut g = Integer::from(1);
 
-    for prime in sieve::primes(1, b1) {
-        let mut prime_power = prime;
+    for prime in sieve.primes(1, b1) {
+        let mut prime_power = *prime;
         while prime_power <= b1 {
-            p = p.mul(prime as u64);
+            p = p.mul(*prime as u64);
             g = (g * p.z()) % n;
             prime_power *= prime;
         }
@@ -48,6 +55,7 @@ fn montgomery_stage_2(
     b2: usize,
     d: usize,
     p: MontgomeryPoint,
+    sieve: &Sieve,
 ) -> Option<Integer> {
     let mut multiples_of_2p: Vec<MontgomeryPoint> = Vec::with_capacity(d + 1);
     let mut xz: Vec<Integer> = Vec::with_capacity(d + 1);
@@ -74,7 +82,7 @@ fn montgomery_stage_2(
     let mut previous_base = p.mul((b - 2 * d) as u64);
     let mut base = p.mul(b as u64); // r * p, the point we move 2d steps forward
 
-    let primes = sieve::primes(b, b2);
+    let primes = sieve.primes(b, b2);
     let mut prime_iter = primes.iter();
 
     for r in (b..b2).step_by(2 * d) {

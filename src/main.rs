@@ -15,6 +15,7 @@ use rug::{Integer, rand::RandState};
 
 use crate::coords::MontgomeryPoint;
 use crate::coords::Point;
+use crate::sieve::Sieve;
 
 #[derive(Parser)]
 struct Args {
@@ -75,6 +76,8 @@ fn main() {
     args.validate();
     args.choose_defaults();
 
+    let sieve = Sieve::new(args.b2.unwrap());
+
     if args.sigma.is_some() {
         match ecm::ecm(
             &args.n,
@@ -88,6 +91,7 @@ fn main() {
                     process::exit(1);
                 }
             },
+            &sieve,
         ) {
             Some(factor) => println!("factor found: {factor}"),
             None => println!("no factor found"),
@@ -119,6 +123,7 @@ fn main() {
                         args.b2.unwrap(),
                         args.d.unwrap(),
                         MontgomeryPoint::random_curve(&args.n, &mut rng),
+                        &sieve,
                     ) {
                         Some(factor) => {
                             println!("factor found: {factor}");
