@@ -6,24 +6,12 @@ use rug::{Complete, Integer};
 // y^2z = x^3 + axz^2 + bz^3
 #[derive(Clone, Debug)]
 pub struct WeierstrassCurve {
-    n: Integer,
-    a: Integer,
-    b: Integer,
+    pub n: Integer,
+    pub a: Integer,
+    pub b: Integer,
 }
 
-impl WeierstrassCurve {
-    pub fn new(n: Integer, a: Integer, b: Integer) -> Self {
-        WeierstrassCurve { n, a, b }
-    }
-
-    pub fn a(&self) -> &Integer {
-        &self.a
-    }
-
-    pub fn b(&self) -> &Integer {
-        &self.b
-    }
-}
+impl WeierstrassCurve {}
 
 impl Curve for WeierstrassCurve {
     fn n(&self) -> &Integer {
@@ -43,10 +31,10 @@ impl Display for WeierstrassCurve {
 
 #[derive(Clone, Debug)]
 pub struct ProjectivePoint {
-    x: Integer,
-    y: Integer,
-    z: Integer,
-    curve: Rc<WeierstrassCurve>,
+    pub x: Integer,
+    pub y: Integer,
+    pub z: Integer,
+    pub curve: Rc<WeierstrassCurve>,
 }
 
 impl ProjectivePoint {

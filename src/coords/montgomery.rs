@@ -7,8 +7,8 @@ use crate::coords::{Curve, Point};
 // y^2z = x^3 + cx^2z + xz^2
 #[derive(Clone, Debug)]
 pub struct MontgomeryCurve {
-    n: Integer,
-    c: Integer,
+    pub n: Integer,
+    pub c: Integer,
 }
 
 impl MontgomeryCurve {
@@ -31,16 +31,12 @@ impl Display for MontgomeryCurve {
 
 #[derive(Clone, Debug)]
 pub struct MontgomeryPoint {
-    x: Integer,
-    z: Integer,
-    curve: Rc<MontgomeryCurve>,
+    pub x: Integer,
+    pub z: Integer,
+    pub curve: Rc<MontgomeryCurve>,
 }
 
 impl MontgomeryPoint {
-    pub fn new(x: Integer, z: Integer, curve: Rc<MontgomeryCurve>) -> MontgomeryPoint {
-        MontgomeryPoint { x, z, curve }
-    }
-
     pub fn normalize(mut self) -> Self {
         if !self.z.is_zero() {
             self.x *= self.z.invert(self.curve.n()).unwrap();
@@ -218,16 +214,15 @@ mod test {
     fn test_mul_2() {
         // NOTE: over composite moduli, need the implementations be equivalent?
         // (different addition chains)
-        let mut n = Integer::from(u128::MAX).next_prime();
+        let mut n = Integer::from(1u32 << 24).next_prime();
         let mut rng = RandState::new();
 
-        for _ in 0..42 {
+        for _ in 0..91 {
             // we have to compute a finite field sqrt to obtain the y coordinate
             while n.mod_u64(4) == 1 {
                 n = (n + 1u32).next_prime();
             }
-
-            for _ in 0..17 {
+            for _ in 0..42 {
                 let (p, y_sq) = loop {
                     let p = MontgomeryPoint::random(&n, &mut rng).normalize();
 
@@ -239,13 +234,16 @@ mod test {
                     let y_sq =
                         (p.x() * (1u32 + (p.x() * (&p.curve().c + p.x()).complete()) % &n)) % &n;
 
-                    if y_sq.legendre(&n) != 1i32 {
+                    if y_sq.legendre(&n) == 1 {
                         break (p, y_sq);
                     }
                 };
 
-                let y = y_sq.pow_mod(&((&n + 1u32).complete() >> 2), &n).unwrap();
-
+                let y = y_sq
+                    .pow_mod_ref(&((&n + 1u32).complete() >> 2), &n)
+                    .unwrap()
+                    .complete();
+                assert!((y.clone().square() - &y_sq) % &n == 0);
                 // x -> x - c/3
                 // y -> y
 
@@ -262,24 +260,25 @@ mod test {
                     (p.x() - &minus_c_over_3).complete(),
                     y,
                     1.into(),
-                    Rc::new(WeierstrassCurve::new(n.clone(), a, b)),
+                    Rc::new(WeierstrassCurve { n: n.clone(), a, b }),
                 );
 
                 assert!(
                     (p_proj.y().clone().square()
                         - (p_proj
-                            .x()
+                            .x
                             .pow_mod_ref(&Integer::from(3), &n)
                             .unwrap()
                             .complete()
-                            + p_proj.x() * p_proj.curve().a()
-                            + p_proj.curve().b()))
+                            + &p_proj.x * &p_proj.curve().a
+                            + &p_proj.curve().b))
                         % &n
                         == 0
                 );
-                assert_eq!(
-                    &(p.mul(2).normalize().x() % &n).complete(),
-                    &((minus_c_over_3 + p_proj.mul(2).normalize().x() + &n) % &n)
+                assert!(
+                    (p.mul(2).normalize().x() - (minus_c_over_3 + p_proj.mul(2).normalize().x()))
+                        % &n
+                        == 0
                 );
             }
             n = (n + 1u32).next_prime();
