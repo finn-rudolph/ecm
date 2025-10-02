@@ -229,17 +229,12 @@ mod test {
 
             for _ in 0..17 {
                 let (p, y_sq) = loop {
-                    let mut p = MontgomeryPoint::random(&n, &mut rng);
+                    let p = MontgomeryPoint::random(&n, &mut rng).normalize();
 
                     // normalize z-coordinate
                     if p.z().is_zero() {
                         continue;
                     }
-                    p = MontgomeryPoint::new(
-                        (p.x() * p.z().invert_ref(&n).unwrap().complete()) % &n,
-                        Integer::from(1),
-                        p.curve_rc().clone(),
-                    );
 
                     let y_sq =
                         (p.x() * (1u32 + (p.x() * (&p.curve().c + p.x()).complete()) % &n)) % &n;
@@ -254,14 +249,14 @@ mod test {
                 // x -> x - c/3
                 // y -> y
 
-                let c_sq = p.curve().c.square_ref().complete();
                 let one_third = Integer::from(3).invert(&n).unwrap();
-                let minus_c_over_3 = (&c_sq * -one_third) % &n;
-                let a = Integer::from(1) + &minus_c_over_3;
+                let minus_c_over_3 = (&p.curve().c * -one_third) % &n;
+                let a = (Integer::from(1) + (&p.curve().c * &minus_c_over_3)) % &n;
                 let mut b = minus_c_over_3.clone();
-                let c_sq_over_9 = minus_c_over_3.square_ref().complete();
-                b += &c_sq_over_9;
+                let c_sq_over_9 = minus_c_over_3.square_ref().complete() % &n;
+                b += &p.curve().c * &c_sq_over_9;
                 b += c_sq_over_9 * &minus_c_over_3;
+                b %= &n;
 
                 let p_proj = ProjectivePoint::new(
                     (p.x() - &minus_c_over_3).complete(),
@@ -270,6 +265,18 @@ mod test {
                     Rc::new(WeierstrassCurve::new(n.clone(), a, b)),
                 );
 
+                assert!(
+                    (p_proj.y().clone().square()
+                        - (p_proj
+                            .x()
+                            .pow_mod_ref(&Integer::from(3), &n)
+                            .unwrap()
+                            .complete()
+                            + p_proj.x() * p_proj.curve().a()
+                            + p_proj.curve().b()))
+                        % &n
+                        == 0
+                );
                 assert_eq!(
                     &(p.mul(2).normalize().x() % &n).complete(),
                     &((minus_c_over_3 + p_proj.mul(2).normalize().x() + &n) % &n)

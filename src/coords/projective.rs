@@ -15,6 +15,14 @@ impl WeierstrassCurve {
     pub fn new(n: Integer, a: Integer, b: Integer) -> Self {
         WeierstrassCurve { n, a, b }
     }
+
+    pub fn a(&self) -> &Integer {
+        &self.a
+    }
+
+    pub fn b(&self) -> &Integer {
+        &self.b
+    }
 }
 
 impl Curve for WeierstrassCurve {
@@ -58,6 +66,10 @@ impl ProjectivePoint {
             self.y %= &self.curve.n;
         }
         self
+    }
+
+    pub fn y(&self) -> &Integer {
+        &self.y
     }
 
     fn add(&self, rhs: &Self) -> Self {
