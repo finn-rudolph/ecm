@@ -1,8 +1,11 @@
+#![feature(thread_id_value)]
+
 mod coords;
 mod ecm;
 mod sieve;
 
 use std::env;
+use std::io::Write;
 use std::process;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -11,6 +14,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use clap::Parser;
+use env_logger::fmt::style::{Color, RgbColor, Style};
 use rug::{Integer, rand::RandState};
 
 use crate::coords::MontgomeryPoint;
@@ -41,8 +45,8 @@ struct Args {
 impl Args {
     fn validate(&self) {
         if self.b2.is_some() && self.b1 > self.b2.unwrap() {
-            eprintln!(
-                "error: argument for `--b2` must be greater or equal than the argument for `--b2`"
+            log::error!(
+                "argument for `--b2` must be greater or equal than the argument for `--b2`"
             );
             process::exit(1);
         }
@@ -66,11 +70,32 @@ impl Args {
     }
 }
 
+fn print_factor(factor: &Integer) {
+    let ff_style = Style::new()
+        .bg_color(Some(Color::Rgb(RgbColor(255, 255, 0))))
+        .fg_color(Some(Color::Rgb(RgbColor(0, 0, 0))));
+
+    log::info!("{ff_style}FACTOR FOUND{ff_style:#} {factor}");
+}
+
 fn main() {
     if env::var("RUST_LOG").is_err() {
         unsafe { env::set_var("RUST_LOG", "info") }
     }
-    env_logger::init();
+    env_logger::builder()
+        .format(|buf, record| {
+            let ts = buf.timestamp_seconds();
+            let style = buf.default_level_style(record.level());
+            writeln!(
+                buf,
+                "[{} {style}{}{style:#} Thread {:0>2}] {}",
+                ts,
+                record.level(),
+                thread::current().id().as_u64(),
+                record.args()
+            )
+        })
+        .init();
 
     let mut args = Args::parse();
     args.validate();
@@ -87,14 +112,14 @@ fn main() {
             match MontgomeryPoint::new_curve(&args.n, &args.sigma.unwrap()) {
                 Some(point) => point,
                 None => {
-                    eprintln!("error: invalid curve parameter σ");
+                    log::error!("invalid curve parameter σ");
                     process::exit(1);
                 }
             },
             &sieve,
         ) {
-            Some(factor) => println!("factor found: {factor}"),
-            None => println!("no factor found"),
+            Some(factor) => print_factor(&factor),
+            None => log::info!("no factor found"),
         }
         return;
     }
@@ -117,7 +142,7 @@ fn main() {
                 );
 
                 while !finished.load(Ordering::Relaxed) {
-                    match ecm::ecm(
+                    if let Some(factor) = ecm::ecm(
                         &args.n,
                         args.b1,
                         args.b2.unwrap(),
@@ -125,11 +150,8 @@ fn main() {
                         MontgomeryPoint::random_curve(&args.n, &mut rng),
                         &sieve,
                     ) {
-                        Some(factor) => {
-                            println!("factor found: {factor}");
-                            finished.store(true, Ordering::Relaxed);
-                        }
-                        None => println!("no factor found"),
+                        print_factor(&factor);
+                        finished.store(true, Ordering::Relaxed);
                     }
                 }
             });

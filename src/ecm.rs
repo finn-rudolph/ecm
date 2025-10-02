@@ -13,14 +13,15 @@ pub fn ecm(
     sieve: &Sieve,
 ) -> Option<Integer> {
     log::info!("using curve {}", p.curve());
-    log::info!("using initial point {}", p);
+    log::debug!("using initial point {}", p);
 
     let q = match stage_1(n, b1, p, sieve) {
         Ok(factor) => return Some(factor),
         Err(point) => point,
     };
 
-    log::info!("beginning stage 2 from {}", q);
+    log::debug!("beginning stage 2 from {}", q);
+
     montgomery_stage_2(n, b1, b2, d, q, sieve)
 }
 
@@ -35,8 +36,6 @@ fn stage_1<T: Point>(n: &Integer, b1: usize, mut p: T, sieve: &Sieve) -> Result<
             prime_power *= prime;
         }
     }
-
-    log::info!("finished stage 1");
 
     g = g.gcd(n);
     if 1 < g && g < *n {
@@ -114,7 +113,6 @@ fn montgomery_stage_2(
         previous_base = curr_base;
     }
 
-    log::info!("finished stage 2");
     g = g.gcd(n);
 
     if 1 < g && g < *n {
