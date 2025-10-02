@@ -42,16 +42,22 @@ pub struct ProjectivePoint {
 }
 
 impl ProjectivePoint {
-    pub fn new(
-        n: Integer,
-        a: Integer,
-        b: Integer,
-        x: Integer,
-        y: Integer,
-        z: Integer,
-    ) -> ProjectivePoint {
-        let curve = Rc::new(WeierstrassCurve::new(n, a, b));
+    pub fn new(x: Integer, y: Integer, z: Integer, curve: Rc<WeierstrassCurve>) -> ProjectivePoint {
         ProjectivePoint { x, y, z, curve }
+    }
+
+    pub fn normalize(mut self) -> Self {
+        if self.z.is_zero() {
+            self.y = Integer::from(1);
+        } else {
+            let z_inv = self.z.invert(self.curve.n()).unwrap();
+            self.z = Integer::from(1);
+            self.x *= &z_inv;
+            self.x %= &self.curve.n;
+            self.y *= &z_inv;
+            self.y %= &self.curve.n;
+        }
+        self
     }
 
     fn add(&self, rhs: &Self) -> Self {

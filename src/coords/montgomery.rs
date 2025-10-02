@@ -11,7 +11,11 @@ pub struct MontgomeryCurve {
     c: Integer,
 }
 
-impl MontgomeryCurve {}
+impl MontgomeryCurve {
+    pub fn new(n: Integer, c: Integer) -> MontgomeryCurve {
+        MontgomeryCurve { n, c }
+    }
+}
 
 impl Curve for MontgomeryCurve {
     fn n(&self) -> &Integer {
@@ -33,6 +37,19 @@ pub struct MontgomeryPoint {
 }
 
 impl MontgomeryPoint {
+    pub fn new(x: Integer, z: Integer, curve: Rc<MontgomeryCurve>) -> MontgomeryPoint {
+        MontgomeryPoint { x, z, curve }
+    }
+
+    pub fn normalize(mut self) -> Self {
+        if !self.z.is_zero() {
+            self.x *= self.z.invert(self.curve.n()).unwrap();
+            self.x %= &self.curve.n;
+            self.z = Integer::from(1);
+        }
+        self
+    }
+
     pub fn add_with_known_difference(
         &self,
         rhs: &MontgomeryPoint,
@@ -186,15 +203,6 @@ mod test {
 
     use super::*;
 
-    fn points_equal(p: &MontgomeryPoint, q: &ProjectivePoint) -> bool {
-        todo!()
-    }
-
-    fn sqrt_mod_p(a: &Integer, p: &Integer) -> Integer {
-        assert!(p.mod_u64(4) == 3);
-        todo!()
-    }
-
     // fn eq(&self, rhs: &Self) -> bool {
     //     // TODO: this currently only works for fields.
     //     if !Rc::ptr_eq(self.curve_rc(), rhs.curve_rc()) {
@@ -221,10 +229,18 @@ mod test {
 
             for _ in 0..17 {
                 let (p, y_sq) = loop {
-                    let p = MontgomeryPoint::random(&n, &mut rng);
+                    let mut p = MontgomeryPoint::random(&n, &mut rng);
+
+                    // normalize z-coordinate
                     if p.z().is_zero() {
                         continue;
                     }
+                    p = MontgomeryPoint::new(
+                        (p.x() * p.z().invert_ref(&n).unwrap().complete()) % &n,
+                        Integer::from(1),
+                        p.curve_rc().clone(),
+                    );
+
                     let y_sq =
                         (p.x() * (1u32 + (p.x() * (&p.curve().c + p.x()).complete()) % &n)) % &n;
 
@@ -247,9 +263,17 @@ mod test {
                 b += &c_sq_over_9;
                 b += c_sq_over_9 * &minus_c_over_3;
 
-                let proj_p =
-                    ProjectivePoint::new(n.clone(), a, b, p.x() - minus_c_over_3, y, 1.into());
-                // assert!(points_equal(&p.mul(2), &p_proj.mul(2)));
+                let p_proj = ProjectivePoint::new(
+                    (p.x() - &minus_c_over_3).complete(),
+                    y,
+                    1.into(),
+                    Rc::new(WeierstrassCurve::new(n.clone(), a, b)),
+                );
+
+                assert_eq!(
+                    &(p.mul(2).normalize().x() % &n).complete(),
+                    &((minus_c_over_3 + p_proj.mul(2).normalize().x() + &n) % &n)
+                );
             }
             n = (n + 1u32).next_prime();
         }
