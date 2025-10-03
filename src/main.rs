@@ -5,11 +5,7 @@ mod ecm;
 mod sieve;
 
 use std::env;
-use std::io::Write;
 use std::process;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::thread;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -37,9 +33,6 @@ struct Args {
 
     #[arg(long, help = "curve selection paramter")]
     sigma: Option<Integer>,
-
-    #[arg(short, long, help = "the number of threads to use")]
-    threads: Option<usize>,
 }
 
 impl Args {
@@ -61,12 +54,6 @@ impl Args {
         if self.d.is_none() {
             self.d = Some(B2B1_RATIO);
         }
-        if self.threads.is_none() {
-            self.threads = Some(match thread::available_parallelism() {
-                Ok(t) => t.get(),
-                Err(_) => 1,
-            });
-        }
     }
 }
 
@@ -82,20 +69,7 @@ fn main() {
     if env::var("RUST_LOG").is_err() {
         unsafe { env::set_var("RUST_LOG", "info") }
     }
-    env_logger::builder()
-        .format(|buf, record| {
-            let ts = buf.timestamp_seconds();
-            let style = buf.default_level_style(record.level());
-            writeln!(
-                buf,
-                "[{} {style}{}{style:#} Thread {:0>2}] {}",
-                ts,
-                record.level(),
-                thread::current().id().as_u64(),
-                record.args()
-            )
-        })
-        .init();
+    env_logger::init();
 
     let mut args = Args::parse();
     args.validate();
@@ -124,37 +98,26 @@ fn main() {
         return;
     }
 
-    let num_threads = args.threads.unwrap();
-    log::info!("using {} threads", num_threads);
+    let mut rng = RandState::new();
+    rng.seed(
+        &SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .into(),
+    );
 
-    let finished = AtomicBool::new(false);
-
-    thread::scope(|s| {
-        for _ in 0..num_threads {
-            s.spawn(|| {
-                let mut rng = RandState::new();
-                rng.seed(
-                    &SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos()
-                        .into(),
-                );
-
-                while !finished.load(Ordering::Relaxed) {
-                    if let Some(factor) = ecm::ecm(
-                        &args.n,
-                        args.b1,
-                        args.b2.unwrap(),
-                        args.d.unwrap(),
-                        MontgomeryPoint::random(&args.n, &mut rng),
-                        &sieve,
-                    ) {
-                        print_factor(&factor);
-                        finished.store(true, Ordering::Relaxed);
-                    }
-                }
-            });
+    loop {
+        if let Some(factor) = ecm::ecm(
+            &args.n,
+            args.b1,
+            args.b2.unwrap(),
+            args.d.unwrap(),
+            MontgomeryPoint::random(&args.n, &mut rng),
+            &sieve,
+        ) {
+            print_factor(&factor);
+            break;
         }
-    });
+    }
 }

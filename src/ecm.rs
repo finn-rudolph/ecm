@@ -20,7 +20,7 @@ pub fn ecm(
         Err(point) => point,
     };
 
-    log::debug!("beginning stage 2 from {}", q);
+    log::info!("beginning stage 2 from {}", q);
 
     montgomery_stage_2(n, b1, b2, d, q, sieve)
 }
